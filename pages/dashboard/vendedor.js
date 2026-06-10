@@ -154,6 +154,28 @@ export default function Vendedor({ user }) {
   const doughOpts = { cutout: '55%', responsive: true, plugins: { legend: { display: false } },
     onClick: (e, els) => { if (els.length) pick('vendedor', dados.porVendedor[els[0].index].vendedor) } }
 
+  // tabelas: quando há realce, elas são FILTRADAS (recalculadas só com o item clicado)
+  function tabelaAgrupada(catKey) {
+    const base = sel ? linhas.filter(r => r[sel.dim] === sel.value) : linhas
+    const m = {}; let total = 0
+    for (const r of base) {
+      const k = r[catKey]
+      if (!m[k]) m[k] = { chave: k, uf: r.uf, qtd: 0, valor: 0 }
+      m[k].qtd += r.qtde; m[k].valor += r.valor_total; total += r.valor_total
+    }
+    return Object.values(m).map(d => ({
+      ...d, valor: Math.round(d.valor * 100) / 100,
+      pct: total > 0 ? Math.round(d.valor / total * 10000) / 100 : 0
+    })).sort((a, b) => b.valor - a.valor).slice(0, 50)
+  }
+  // sem realce usa o ranking do servidor (top 10); com realce usa o recalculado
+  const tabCli = sel
+    ? tabelaAgrupada('cliente').map(d => ({ cliente: d.chave, uf: d.uf, qtd: d.qtd, valor: d.valor, pct: d.pct }))
+    : (dados?.tabelaClientes || [])
+  const tabProd = sel
+    ? tabelaAgrupada('produto').map(d => ({ produto: d.chave, qtde: d.qtd, valor: d.valor, pct: d.pct }))
+    : (dados?.tabelaProdutos || [])
+
   return (
     <div style={{ minHeight: '100vh', background: '#f4f6fb', fontFamily: "'Segoe UI',system-ui,sans-serif", fontSize: 13 }}>
       <Head><title>Clamalu · Vendedor</title></Head>
@@ -302,7 +324,7 @@ export default function Vendedor({ user }) {
           {/* TABELAS */}
           <div style={st.row2}>
             <div style={st.card}>
-              <div style={st.cardTitle}>Ranking de clientes</div>
+              <div style={st.cardTitle}>Ranking de clientes {sel && <span style={{ fontWeight: 500, textTransform: 'none', color: '#ea8c00' }}>· filtrado por {sel.value}</span>}</div>
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr>
@@ -312,10 +334,9 @@ export default function Vendedor({ user }) {
                     <th style={{ ...st.th, textAlign: 'right' }}>Valor</th>
                   </tr></thead>
                   <tbody>
-                    {dados?.tabelaClientes?.map((c, i) => {
-                      const on = contribui('cliente', c.cliente)
-                      return (
-                      <tr key={i} onClick={() => pick('cliente', c.cliente)} style={{ cursor: 'pointer', opacity: on ? 1 : 0.35, background: isSel('cliente', c.cliente) ? '#e8eeff' : '' }}>
+                    {tabCli.length === 0 && <tr><td style={{ ...st.td, color: '#9aa6bf' }} colSpan={6}>Nenhum cliente para este realce.</td></tr>}
+                    {tabCli.map((c, i) => (
+                      <tr key={i} onClick={() => pick('cliente', c.cliente)} style={{ cursor: 'pointer', background: isSel('cliente', c.cliente) ? '#e8eeff' : '' }}>
                         <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
                         <td style={{ ...st.td, fontWeight: 600, fontSize: 11 }}>{c.cliente}</td>
                         <td style={st.td}><span style={{ padding:'2px 8px',borderRadius:5,fontSize:10,fontWeight:700,background:'#e8eeff',color:'#1341c4' }}>{c.uf}</span></td>
@@ -323,13 +344,13 @@ export default function Vendedor({ user }) {
                         <td style={{ ...st.td, textAlign: 'right' }}>{c.pct}%</td>
                         <td style={{ ...st.td, textAlign: 'right', fontWeight: 700 }}>{fmtVal(c.valor)}</td>
                       </tr>
-                    )})}
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
             <div style={st.card}>
-              <div style={st.cardTitle}>Ranking de produtos</div>
+              <div style={st.cardTitle}>Ranking de produtos {sel && <span style={{ fontWeight: 500, textTransform: 'none', color: '#ea8c00' }}>· filtrado por {sel.value}</span>}</div>
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr>
@@ -339,17 +360,16 @@ export default function Vendedor({ user }) {
                     <th style={{ ...st.th, textAlign: 'right' }}>Valor</th>
                   </tr></thead>
                   <tbody>
-                    {dados?.tabelaProdutos?.map((p, i) => {
-                      const on = contribui('produto', p.produto)
-                      return (
-                      <tr key={i} onClick={() => pick('produto', p.produto)} style={{ cursor: 'pointer', opacity: on ? 1 : 0.35, background: isSel('produto', p.produto) ? '#e8eeff' : '' }}>
+                    {tabProd.length === 0 && <tr><td style={{ ...st.td, color: '#9aa6bf' }} colSpan={5}>Nenhum produto para este realce.</td></tr>}
+                    {tabProd.map((p, i) => (
+                      <tr key={i} onClick={() => pick('produto', p.produto)} style={{ cursor: 'pointer', background: isSel('produto', p.produto) ? '#e8eeff' : '' }}>
                         <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
                         <td style={{ ...st.td, fontWeight: 600, fontSize: 11 }}>{p.produto}</td>
                         <td style={{ ...st.td, textAlign: 'right' }}>{p.pct}%</td>
                         <td style={{ ...st.td, textAlign: 'right' }}>{fmtN(p.qtde)}</td>
                         <td style={{ ...st.td, textAlign: 'right', fontWeight: 700 }}>{fmtVal(p.valor)}</td>
                       </tr>
-                    )})}
+                    ))}
                   </tbody>
                 </table>
               </div>
