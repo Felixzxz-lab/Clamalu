@@ -18,3 +18,8 @@ npm-debug.log*
 # misc
 .DS_Store
 .vercel
+
+# documentos com dados pessoais (NUNCA comitar — repo é publico)
+CONTRATO*.md
+CONTRATO*.docx
+*.contrato.md
