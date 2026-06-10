@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import { parse } from 'cookie'
+import { verifyToken } from '../../lib/auth'
 import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
@@ -205,8 +207,6 @@ export default function Comparacao({ user }) {
 }
 
 export async function getServerSideProps({ req }) {
-  const { parse } = await import('cookie')
-  const { verifyToken } = await import('../../lib/auth')
   const cookies = parse(req.headers.cookie || '')
   const user = verifyToken(cookies.clamalu_token)
   if (!user) return { redirect: { destination: '/', permanent: false } }

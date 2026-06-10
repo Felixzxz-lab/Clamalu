@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
+import { parse } from 'cookie'
+import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -278,8 +280,6 @@ export default function Vendedor({ user }) {
 }
 
 export async function getServerSideProps({ req }) {
-  const { parse } = await import('cookie')
-  const { verifyToken } = await import('../../lib/auth')
   const cookies = parse(req.headers.cookie || '')
   const user = verifyToken(cookies.clamalu_token)
   if (!user) return { redirect: { destination: '/', permanent: false } }
