@@ -71,8 +71,14 @@ export default requireAuth(async function handler(req, res) {
     pct: Math.round(d.valor / totalValor * 10000) / 100
   })).sort((a, b) => b.valor - a.valor).slice(0, 10)
 
+  // linhas detalhadas para o realce cruzado no front (não filtra, só permite recalcular fatias)
+  const linhas = data.map(r => ({
+    vendedor: r.vendedor, cliente: r.cliente, uf: r.uf,
+    produto: r.produto, qtde: r.qtde, valor_total: r.valor_total
+  }))
+
   return res.status(200).json({
     kpis: { qtde: totalQtde, valor: Math.round(totalValor * 100) / 100, clientes: totalClientes },
-    porVendedor, topProdQtde, topProdValor, tabelaClientes, tabelaProdutos
+    porVendedor, topProdQtde, topProdValor, tabelaClientes, tabelaProdutos, linhas
   })
 })
