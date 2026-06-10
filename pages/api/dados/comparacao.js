@@ -10,13 +10,14 @@ export default requireAuth(async function handler(req, res) {
 
   const anosArr = anos ? anos.split(',').map(Number) : [2025, 2026]
   const mesesArr = meses ? meses.split(',').map(Number) : null
+  const vends = (vendedor || '').split(',').filter(Boolean)
 
   let data
   try {
     data = await selectAll(() => {
       let q = db.from('vendas').select('ano,mes,vendedor,qtde,valor_total').in('ano', anosArr)
       if (mesesArr?.length) q = q.in('mes', mesesArr)
-      if (vendedor) q = q.eq('vendedor', vendedor)
+      if (vends.length) q = q.in('vendedor', vends)
       return q
     })
   } catch (e) {

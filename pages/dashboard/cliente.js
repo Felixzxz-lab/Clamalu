@@ -7,6 +7,7 @@ import { Line, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
 import { fade, contribui, tabelaAgrupada } from '../../lib/realce'
 import { RealceBanner } from '../../components/realce'
+import { MultiSelect, ANOS_OPC, MESES_OPC, VEND_OPC } from '../../components/MultiSelect'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
 const COR_UFS = { GO:'#1341c4',MT:'#16a34a',PA:'#dc2626',TO:'#ea8c00',RO:'#7c3aed',DF:'#0891b2' }
@@ -17,9 +18,9 @@ export default function Cliente({ user }) {
   const router = useRouter()
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [fAno, setFAno] = useState('')
-  const [fMes, setFMes] = useState('')
-  const [fVend, setFVend] = useState('')
+  const [fAno, setFAno] = useState([])
+  const [fMes, setFMes] = useState([])
+  const [fVend, setFVend] = useState([])
   const [cliAtivo, setCliAtivo] = useState(null)
   const [sel, setSel] = useState(null)
 
@@ -29,9 +30,9 @@ export default function Cliente({ user }) {
   async function carregar() {
     setLoading(true)
     const p = new URLSearchParams()
-    if (fAno) p.set('ano', fAno)
-    if (fMes) p.set('mes', fMes)
-    if (fVend) p.set('vendedor', fVend)
+    if (fAno.length) p.set('ano', fAno.join(','))
+    if (fMes.length) p.set('mes', fMes.join(','))
+    if (fVend.length) p.set('vendedor', fVend.join(','))
     const r = await fetch('/api/dados/cliente?' + p)
     if (r.status === 401) { router.push('/'); return }
     setDados(await r.json())
@@ -112,10 +113,10 @@ export default function Cliente({ user }) {
       </div>
 
       <div style={st.filtros}>
-        <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Ano</span><select style={{ ...st.select,borderColor:'#a3b4f5' }} value={fAno} onChange={e=>setFAno(e.target.value)}><option value="">Todos</option><option>2024</option><option>2025</option><option>2026</option></select></div>
-        <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Mês</span><select style={{ ...st.select,borderColor:'#f5a3a3' }} value={fMes} onChange={e=>setFMes(e.target.value)}><option value="">Todos</option>{['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m,i)=><option key={i} value={i+1}>{m}</option>)}</select></div>
-        <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Vendedor</span><select style={{ ...st.select,borderColor:'#a3dbb4' }} value={fVend} onChange={e=>setFVend(e.target.value)}><option value="">Todos</option><option>THIAGO</option><option>WENDEL</option><option>CLEBER</option><option>CLAMALU</option></select></div>
-        <button style={{ padding:'6px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }} onClick={()=>{setFAno('');setFMes('');setFVend('')}}>✕ Limpar</button>
+        <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Ano</span><MultiSelect options={ANOS_OPC} value={fAno} onChange={setFAno} accent="#a3b4f5" minWidth={110} /></div>
+        <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Mês</span><MultiSelect options={MESES_OPC} value={fMes} onChange={setFMes} accent="#f5a3a3" minWidth={120} /></div>
+        <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Vendedor</span><MultiSelect options={VEND_OPC} value={fVend} onChange={setFVend} accent="#a3dbb4" minWidth={120} /></div>
+        <button style={{ padding:'6px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }} onClick={()=>{setFAno([]);setFMes([]);setFVend([])}}>✕ Limpar</button>
         <button style={{ marginLeft:'auto',padding:'6px 16px',borderRadius:8,border:'none',background:'#16a34a',color:'white',fontSize:12,fontWeight:600,cursor:'pointer' }} onClick={exportar}>⬇ Exportar Excel</button>
       </div>
 

@@ -6,6 +6,7 @@ import { verifyToken } from '../../lib/auth'
 import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 import { RealceBanner } from '../../components/realce'
+import { MultiSelect, VEND_OPC } from '../../components/MultiSelect'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
 const CORES_ANO = { 2024:'#93aafc', 2025:'#1341c4', 2026:'#16a34a' }
@@ -21,7 +22,7 @@ export default function Comparacao({ user }) {
   const [loading, setLoading] = useState(true)
   const [anos, setAnos] = useState([2025, 2026])
   const [mesesSel, setMesesSel] = useState([])
-  const [fVend, setFVend] = useState('')
+  const [fVend, setFVend] = useState([])
   const [sel, setSel] = useState(null) // realce de série: { dim:'ano'|'vendedor', value }
 
   useEffect(() => { carregar() }, [anos, mesesSel, fVend])
@@ -39,7 +40,7 @@ export default function Comparacao({ user }) {
     const p = new URLSearchParams()
     p.set('anos', anos.join(','))
     if (mesesSel.length) p.set('meses', mesesSel.join(','))
-    if (fVend) p.set('vendedor', fVend)
+    if (fVend.length) p.set('vendedor', fVend.join(','))
     const r = await fetch('/api/dados/comparacao?' + p)
     if (r.status === 401) { router.push('/'); return }
     setDados(await r.json())
@@ -122,12 +123,10 @@ export default function Comparacao({ user }) {
         </div>
         <div>
           <span style={st.label}>Vendedor</span>
-          <select style={{ border:'1.5px solid #e2e6f0',borderRadius:8,padding:'6px 12px',fontSize:12,background:'#f4f6fb',cursor:'pointer',outline:'none' }} value={fVend} onChange={e=>setFVend(e.target.value)}>
-            <option value="">Todos</option><option>THIAGO</option><option>WENDEL</option><option>CLEBER</option><option>CLAMALU</option>
-          </select>
+          <MultiSelect options={VEND_OPC} value={fVend} onChange={setFVend} minWidth={130} />
         </div>
         <div style={{ display:'flex',alignItems:'flex-end',gap:8,marginLeft:'auto' }}>
-          <button onClick={()=>{setAnos([2025,2026]);setMesesSel([]);setFVend('')}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>
+          <button onClick={()=>{setAnos([2025,2026]);setMesesSel([]);setFVend([])}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>
           <button onClick={exportar} style={{ padding:'7px 16px',borderRadius:8,border:'none',background:'#16a34a',color:'white',fontSize:12,fontWeight:600,cursor:'pointer' }}>⬇ Exportar Excel</button>
         </div>
       </div>

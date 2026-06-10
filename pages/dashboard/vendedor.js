@@ -5,6 +5,7 @@ import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
+import { MultiSelect, ANOS_OPC, MESES_OPC, VEND_OPC } from '../../components/MultiSelect'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 const CORES = { THIAGO: '#1341c4', WENDEL: '#16a34a', CLEBER: '#dc2626', CLAMALU: '#ea8c00' }
@@ -19,9 +20,9 @@ export default function Vendedor({ user }) {
   const router = useRouter()
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [fAno, setFAno] = useState('')
-  const [fMes, setFMes] = useState('')
-  const [fVend, setFVend] = useState('')
+  const [fAno, setFAno] = useState([])
+  const [fMes, setFMes] = useState([])
+  const [fVend, setFVend] = useState([])
   const [sel, setSel] = useState(null) // realce: { dim, value }
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
@@ -29,9 +30,9 @@ export default function Vendedor({ user }) {
   async function carregar() {
     setLoading(true)
     const p = new URLSearchParams()
-    if (fAno) p.set('ano', fAno)
-    if (fMes) p.set('mes', fMes)
-    if (fVend) p.set('vendedor', fVend)
+    if (fAno.length) p.set('ano', fAno.join(','))
+    if (fMes.length) p.set('mes', fMes.join(','))
+    if (fVend.length) p.set('vendedor', fVend.join(','))
     const r = await fetch('/api/dados/vendedor?' + p)
     if (r.status === 401) { router.push('/'); return }
     const d = await r.json()
@@ -202,24 +203,17 @@ export default function Vendedor({ user }) {
       <div style={st.filtros}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Ano</span>
-          <select style={{ ...st.select, borderColor: '#a3b4f5' }} value={fAno} onChange={e => setFAno(e.target.value)}>
-            <option value="">Todos</option><option>2024</option><option>2025</option><option>2026</option>
-          </select>
+          <MultiSelect options={ANOS_OPC} value={fAno} onChange={setFAno} accent="#a3b4f5" minWidth={110} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Mês</span>
-          <select style={{ ...st.select, borderColor: '#f5a3a3' }} value={fMes} onChange={e => setFMes(e.target.value)}>
-            <option value="">Todos</option>
-            {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m,i) => <option key={i} value={i+1}>{m}</option>)}
-          </select>
+          <MultiSelect options={MESES_OPC} value={fMes} onChange={setFMes} accent="#f5a3a3" minWidth={120} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Vendedor</span>
-          <select style={{ ...st.select, borderColor: '#f5d6a3' }} value={fVend} onChange={e => setFVend(e.target.value)}>
-            <option value="">Todos</option><option>THIAGO</option><option>WENDEL</option><option>CLEBER</option><option>CLAMALU</option>
-          </select>
+          <MultiSelect options={VEND_OPC} value={fVend} onChange={setFVend} accent="#f5d6a3" minWidth={120} />
         </div>
-        <button style={st.btnLimpar} onClick={() => { setFAno(''); setFMes(''); setFVend('') }}>✕ Limpar</button>
+        <button style={st.btnLimpar} onClick={() => { setFAno([]); setFMes([]); setFVend([]) }}>✕ Limpar</button>
         <button style={st.btnExport} onClick={exportar}>⬇ Exportar Excel</button>
       </div>
 

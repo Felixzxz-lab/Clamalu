@@ -6,15 +6,17 @@ export default requireAuth(async function handler(req, res) {
   if (!req.user.paginas?.includes('cliente')) return res.status(403).json({ error: 'Sem acesso' })
 
   const db = supabaseAdmin()
-  const { ano, mes, vendedor } = req.query
+  const anos = (req.query.ano || '').split(',').filter(Boolean).map(Number)
+  const meses = (req.query.mes || '').split(',').filter(Boolean).map(Number)
+  const vends = (req.query.vendedor || '').split(',').filter(Boolean)
 
   let data
   try {
     data = await selectAll(() => {
       let q = db.from('vendas').select('cliente,uf,cidade,qtde,valor_total,ano,mes,vendedor')
-      if (ano) q = q.eq('ano', parseInt(ano))
-      if (mes) q = q.eq('mes', parseInt(mes))
-      if (vendedor) q = q.eq('vendedor', vendedor)
+      if (anos.length) q = q.in('ano', anos)
+      if (meses.length) q = q.in('mes', meses)
+      if (vends.length) q = q.in('vendedor', vends)
       return q
     })
   } catch (e) {
