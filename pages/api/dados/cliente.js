@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../../lib/supabase'
 import { requireAuth } from '../../../lib/auth'
+import { selectAll } from '../../../lib/db'
 
 export default requireAuth(async function handler(req, res) {
   if (!req.user.paginas?.includes('cliente')) return res.status(403).json({ error: 'Sem acesso' })
@@ -7,13 +8,18 @@ export default requireAuth(async function handler(req, res) {
   const db = supabaseAdmin()
   const { ano, mes, vendedor } = req.query
 
-  let q = db.from('vendas').select('cliente,uf,cidade,qtde,valor_total,ano,mes,vendedor')
-  if (ano) q = q.eq('ano', parseInt(ano))
-  if (mes) q = q.eq('mes', parseInt(mes))
-  if (vendedor) q = q.eq('vendedor', vendedor)
-
-  const { data, error } = await q
-  if (error) return res.status(500).json({ error: error.message })
+  let data
+  try {
+    data = await selectAll(() => {
+      let q = db.from('vendas').select('cliente,uf,cidade,qtde,valor_total,ano,mes,vendedor')
+      if (ano) q = q.eq('ano', parseInt(ano))
+      if (mes) q = q.eq('mes', parseInt(mes))
+      if (vendedor) q = q.eq('vendedor', vendedor)
+      return q
+    })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
 
   const totalValor = data.reduce((s, r) => s + r.valor_total, 0)
   const totalQtde = data.reduce((s, r) => s + r.qtde, 0)

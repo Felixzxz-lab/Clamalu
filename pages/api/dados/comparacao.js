@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../../lib/supabase'
 import { requireAuth } from '../../../lib/auth'
+import { selectAll } from '../../../lib/db'
 
 export default requireAuth(async function handler(req, res) {
   if (!req.user.paginas?.includes('comparacao')) return res.status(403).json({ error: 'Sem acesso' })
@@ -10,12 +11,17 @@ export default requireAuth(async function handler(req, res) {
   const anosArr = anos ? anos.split(',').map(Number) : [2025, 2026]
   const mesesArr = meses ? meses.split(',').map(Number) : null
 
-  let q = db.from('vendas').select('ano,mes,vendedor,qtde,valor_total').in('ano', anosArr)
-  if (mesesArr?.length) q = q.in('mes', mesesArr)
-  if (vendedor) q = q.eq('vendedor', vendedor)
-
-  const { data, error } = await q
-  if (error) return res.status(500).json({ error: error.message })
+  let data
+  try {
+    data = await selectAll(() => {
+      let q = db.from('vendas').select('ano,mes,vendedor,qtde,valor_total').in('ano', anosArr)
+      if (mesesArr?.length) q = q.in('mes', mesesArr)
+      if (vendedor) q = q.eq('vendedor', vendedor)
+      return q
+    })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
 
   // Mensal por ano
   const mensal = {}

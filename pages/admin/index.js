@@ -15,6 +15,11 @@ export default function Admin({ user }) {
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
   const fileRef = useRef()
+  // prévia de importação
+  const [arquivo, setArquivo] = useState(null)   // { base64, nome }
+  const [previa, setPrevia] = useState(null)      // { abas: [...] }
+  const [abasSel, setAbasSel] = useState([])      // nomes de abas marcadas
+  const [limparAntes, setLimparAntes] = useState(false)
 
   useEffect(() => { carregarUsuarios(); carregarUploads() }, [])
 
@@ -55,28 +60,69 @@ export default function Admin({ user }) {
     window.scrollTo(0,0)
   }
 
-  async function uploadPlanilha(e) {
+  function resetImport() {
+    setArquivo(null); setPrevia(null); setAbasSel([]); setLimparAntes(false)
+    setUploadMsg(''); if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // Passo 1: lê o arquivo e pede a prévia (NÃO grava nada)
+  async function escolherArquivo(e) {
     const file = e.target.files[0]
     if (!file) return
-    setUploading(true)
-    setUploadMsg('Lendo arquivo...')
+    setUploading(true); setPrevia(null); setUploadMsg('Lendo e analisando o arquivo...')
     const reader = new FileReader()
     reader.onload = async (ev) => {
       const base64 = ev.target.result.split(',')[1]
-      setUploadMsg('Enviando para o servidor...')
-      const r = await fetch('/api/admin/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileData: base64, fileName: file.name })
-      })
-      const d = await r.json()
+      try {
+        const r = await fetch('/api/admin/preview', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileData: base64 })
+        })
+        const d = await r.json()
+        if (!r.ok) { setUploadMsg('❌ Erro: ' + d.error); setUploading(false); return }
+        setArquivo({ base64, nome: file.name })
+        setPrevia(d)
+        // por padrão marca a primeira aba que tem dados
+        const comDados = d.abas.filter(a => a.totalLinhas > 0)
+        setAbasSel(comDados.length ? [comDados[0].nome] : [])
+        setUploadMsg('')
+      } catch (err) {
+        setUploadMsg('❌ Erro ao ler o arquivo: ' + err.message)
+      }
       setUploading(false)
-      if (r.ok) setUploadMsg(`✅ ${d.total} registros importados com sucesso!`)
-      else setUploadMsg('❌ Erro: ' + d.error)
-      carregarUploads()
-      fileRef.current.value = ''
     }
     reader.readAsDataURL(file)
+  }
+
+  const toggleAba = (nome) => setAbasSel(s => s.includes(nome) ? s.filter(x => x !== nome) : [...s, nome])
+
+  // Passo 2: confirma e importa as abas selecionadas
+  async function confirmarImport() {
+    if (!arquivo || !abasSel.length) return
+    const totalSel = previa.abas.filter(a => abasSel.includes(a.nome)).reduce((s, a) => s + a.totalLinhas, 0)
+    const aviso = limparAntes
+      ? `Isto vai APAGAR todos os dados atuais e importar ${totalSel.toLocaleString('pt-BR')} linhas. Continuar?`
+      : `Isto vai ADICIONAR ${totalSel.toLocaleString('pt-BR')} linhas aos dados já existentes. Continuar?`
+    if (!confirm(aviso)) return
+    setUploading(true); setUploadMsg('Importando...')
+    try {
+      const r = await fetch('/api/admin/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileData: arquivo.base64, fileName: arquivo.nome, sheets: abasSel, limparAntes })
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setUploadMsg(`✅ ${d.total.toLocaleString('pt-BR')} registros importados${d.limpou ? ' (dados anteriores apagados)' : ' e somados aos existentes'}!`)
+        setArquivo(null); setPrevia(null); setAbasSel([]); setLimparAntes(false)
+        if (fileRef.current) fileRef.current.value = ''
+        carregarUploads()
+      } else {
+        setUploadMsg('❌ Erro: ' + d.error)
+      }
+    } catch (err) {
+      setUploadMsg('❌ Erro: ' + err.message)
+    }
+    setUploading(false)
   }
 
   async function sair() {
@@ -199,21 +245,88 @@ export default function Admin({ user }) {
           {/* ABA PLANILHA */}
           {aba === 'planilha' && (
             <div style={st.card}>
-              <h3 style={{fontSize:13,fontWeight:700,color:'#0f1729',marginBottom:8}}>📊 Upload de planilha de vendas</h3>
-              <p style={{fontSize:12,color:'#6b7a99',marginBottom:20}}>Envie a planilha Excel (.xlsx) com os dados de vendas. Os dados anteriores serão substituídos pelos novos.</p>
+              <h3 style={{fontSize:13,fontWeight:700,color:'#0f1729',marginBottom:8}}>📊 Importar planilha de vendas</h3>
+              <p style={{fontSize:12,color:'#6b7a99',marginBottom:20}}>Selecione o arquivo Excel (.xlsx). Você verá uma prévia dos dados e escolhe as abas antes de confirmar. Por padrão os dados são <strong>somados</strong> aos já existentes.</p>
 
-              <div style={{border:'2px dashed #e2e6f0',borderRadius:12,padding:40,textAlign:'center',background:'#f9fafb',marginBottom:16}}>
-                <div style={{fontSize:40,marginBottom:12}}>📂</div>
-                <p style={{fontSize:13,fontWeight:600,color:'#0f1729',marginBottom:4}}>Selecione a planilha Excel</p>
-                <p style={{fontSize:11,color:'#6b7a99',marginBottom:16}}>Formato aceito: .xlsx — Colunas: N.F, DATA, CLIENTE, CIDADE, UF, PRODUTO, EMPRESA, QTDE, VALOR UNIT., VALOR TOTAL, VENDEDOR</p>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={uploadPlanilha} style={{display:'none'}} id="fileInput" />
-                <label htmlFor="fileInput" style={{...st.btnVerde,cursor:'pointer',display:'inline-block',padding:'10px 24px'}}>
-                  {uploading ? '⏳ Processando...' : '📤 Selecionar arquivo'}
-                </label>
-              </div>
+              {!previa && (
+                <div style={{border:'2px dashed #e2e6f0',borderRadius:12,padding:40,textAlign:'center',background:'#f9fafb',marginBottom:16}}>
+                  <div style={{fontSize:40,marginBottom:12}}>📂</div>
+                  <p style={{fontSize:13,fontWeight:600,color:'#0f1729',marginBottom:4}}>Selecione a planilha Excel</p>
+                  <p style={{fontSize:11,color:'#6b7a99',marginBottom:16}}>Formato aceito: .xlsx — Colunas: N.F, DATA, CLIENTE, CIDADE, UF, PRODUTO, EMPRESA, QTDE, VALOR UNIT., VALOR TOTAL, VENDEDOR</p>
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={escolherArquivo} style={{display:'none'}} id="fileInput" />
+                  <label htmlFor="fileInput" style={{...st.btnVerde,cursor:'pointer',display:'inline-block',padding:'10px 24px'}}>
+                    {uploading ? '⏳ Analisando...' : '📤 Selecionar arquivo'}
+                  </label>
+                </div>
+              )}
+
+              {/* PRÉVIA */}
+              {previa && (
+                <div>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                    <div style={{fontSize:12,color:'#0f1729'}}>📄 <strong>{arquivo?.nome}</strong> — marque as abas que deseja importar:</div>
+                    <button onClick={resetImport} style={{...st.btn,background:'#6b7a99',fontSize:11}}>Trocar arquivo</button>
+                  </div>
+
+                  {previa.abas.map(a => {
+                    const sel = abasSel.includes(a.nome)
+                    const vazia = a.totalLinhas === 0
+                    return (
+                      <div key={a.nome} style={{border:`1.5px solid ${sel?'#1341c4':'#e2e6f0'}`,borderRadius:10,padding:16,marginBottom:12,background:sel?'#f7f9ff':'white',opacity:vazia?0.55:1}}>
+                        <label style={{display:'flex',alignItems:'center',gap:10,cursor:vazia?'not-allowed':'pointer',marginBottom:sel?12:0}}>
+                          <input type="checkbox" checked={sel} disabled={vazia} onChange={()=>toggleAba(a.nome)} />
+                          <span style={{fontSize:13,fontWeight:700,color:'#0f1729'}}>{a.nome}</span>
+                          <span style={{fontSize:11,color:'#6b7a99'}}>
+                            {a.totalLinhas.toLocaleString('pt-BR')} linhas · {a.clientesDistintos} clientes · {a.valorTotal.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+                            {a.periodo && ` · ${a.periodo.de} a ${a.periodo.ate}`}
+                            {a.semData > 0 && <span style={{color:'#b45309'}}> · ⚠️ {a.semData} sem data</span>}
+                          </span>
+                        </label>
+
+                        {sel && a.amostra?.length > 0 && (
+                          <div style={{overflowX:'auto',marginTop:6}}>
+                            <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+                              <thead><tr>
+                                {['Data','Cliente','Cidade','UF','Produto','Qtde','Valor Total','Vendedor'].map(h=><th key={h} style={st.th}>{h}</th>)}
+                              </tr></thead>
+                              <tbody>
+                                {a.amostra.map((r,i)=>(
+                                  <tr key={i}>
+                                    <td style={st.td}>{r.data||'—'}</td>
+                                    <td style={st.td}>{r.cliente||'—'}</td>
+                                    <td style={st.td}>{r.cidade||'—'}</td>
+                                    <td style={st.td}>{r.uf||'—'}</td>
+                                    <td style={st.td}>{r.produto||'—'}</td>
+                                    <td style={st.td}>{r.qtde}</td>
+                                    <td style={st.td}>{(r.valor_total||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</td>
+                                    <td style={st.td}>{r.vendedor||'—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <p style={{fontSize:10,color:'#6b7a99',marginTop:6}}>Mostrando as 8 primeiras linhas (de {a.totalLinhas.toLocaleString('pt-BR')}).</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  <label style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'#0f1729',margin:'14px 0',padding:'10px 14px',borderRadius:8,background:'#fff7ed',border:'1px solid #fed7aa'}}>
+                    <input type="checkbox" checked={limparAntes} onChange={e=>setLimparAntes(e.target.checked)} />
+                    <span>🗑️ Apagar <strong>todos os dados atuais</strong> antes de importar (carga limpa). Deixe desmarcado para <strong>somar</strong> aos dados existentes.</span>
+                  </label>
+
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <button onClick={confirmarImport} disabled={uploading || !abasSel.length} style={{...st.btnVerde,padding:'10px 24px',opacity:(uploading||!abasSel.length)?0.5:1,cursor:(uploading||!abasSel.length)?'not-allowed':'pointer'}}>
+                      {uploading ? '⏳ Importando...' : `✅ Confirmar importação (${abasSel.length} aba${abasSel.length!==1?'s':''})`}
+                    </button>
+                    <button onClick={resetImport} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>
+                  </div>
+                </div>
+              )}
 
               {uploadMsg && (
-                <div style={{padding:'12px 16px',borderRadius:8,background: uploadMsg.includes('✅')?'#dcfce7':'#fef2f2',color: uploadMsg.includes('✅')?'#15803d':'#dc2626',fontSize:13,fontWeight:600}}>
+                <div style={{marginTop:16,padding:'12px 16px',borderRadius:8,background: uploadMsg.includes('✅')?'#dcfce7':'#fef2f2',color: uploadMsg.includes('✅')?'#15803d':'#dc2626',fontSize:13,fontWeight:600}}>
                   {uploadMsg}
                 </div>
               )}
