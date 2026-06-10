@@ -5,6 +5,8 @@ import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
+import { fade, aggBy, contribui, tabelaAgrupada } from '../../lib/realce'
+import { RealceBanner } from '../../components/realce'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 const COR_UFS = { GO:'#1341c4',MT:'#16a34a',PA:'#dc2626',TO:'#ea8c00',RO:'#7c3aed',DF:'#0891b2' }
@@ -21,6 +23,7 @@ export default function Produto({ user }) {
   const [fVend, setFVend] = useState('')
   const [prodAtivo, setProdAtivo] = useState(null)
   const [expandido, setExpandido] = useState(false)
+  const [sel, setSel] = useState(null)
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
   useEffect(() => { if (dados?.prodUf?.length) setProdAtivo(dados.prodUf[0].produto) }, [dados])
@@ -34,9 +37,18 @@ export default function Produto({ user }) {
     const r = await fetch('/api/dados/produto?' + p)
     if (r.status === 401) { router.push('/'); return }
     setDados(await r.json())
+    setSel(null)
     setLoading(false)
     setExpandido(false)
   }
+
+  const linhas = dados?.linhas || []
+  function pick(dim, value) {
+    if (!value) return
+    setSel(s => (s && s.dim === dim && s.value === value) ? null : { dim, value })
+    if (dim === 'produto') setProdAtivo(value)
+  }
+  const isSel = (dim, value) => sel && sel.dim === dim && sel.value === value
 
   async function exportar() {
     const XLSX = await import('xlsx')
@@ -71,6 +83,44 @@ export default function Produto({ user }) {
   const principais = prodUfAtivo?.ufs?.slice(0,5) || []
   const extras = prodUfAtivo?.ufs?.slice(5) || []
 
+  // gráficos de barras (top5) com realce two-tone
+  function barTop(lista, measure) {
+    const hi = aggBy(linhas, 'produto', measure, sel)
+    const val = p => measure === 'qtde' ? p.qtde : p.valor
+    const full = lista.map(p => p.produto)
+    return {
+      data: {
+        labels: lista.map(p => p.produto.length > 20 ? p.produto.slice(0,20)+'…' : p.produto),
+        datasets: [
+          { label:'Realçado', stack:'s', borderRadius:4, data: lista.map(p => Math.min(val(p), hi[p.produto]||0)), backgroundColor: lista.map((_,i)=>AZUIS[i%AZUIS.length]) },
+          { label:'Restante', stack:'s', borderRadius:4, data: lista.map(p => Math.max(0, val(p)-(hi[p.produto]||0))), backgroundColor: lista.map((_,i)=>fade(AZUIS[i%AZUIS.length])) },
+        ]
+      },
+      opts: {
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        onClick:(e,els)=>{ if(els.length) pick('produto', full[els[0].index]) },
+        plugins:{legend:{display:false}}, scales:{x:{stacked:true,grid:{color:'#f0f2f8'}},y:{stacked:true,grid:{display:false}}}
+      }
+    }
+  }
+  const bV = barTop(dados?.top5Valor || [], 'valor')
+  const bQ = barTop(dados?.top5Qtde || [], 'qtde')
+
+  // doughnut UF com esmaecimento dos que não contribuem
+  const dough = {
+    labels: dados?.ufTotal?.map(u=>u.uf) || [],
+    datasets: [{ data: dados?.ufTotal?.map(u=>u.pct) || [],
+      backgroundColor: dados?.ufTotal?.map(u => contribui(linhas,'uf',u.uf,sel) ? (COR_UFS[u.uf]||'#9ca3af') : fade(COR_UFS[u.uf]||'#9ca3af')) || [],
+      borderWidth:3, borderColor:'#fff' }]
+  }
+  const doughOpts = { cutout:'55%', responsive:true, plugins:{legend:{display:false}},
+    onClick:(e,els)=>{ if(els.length) pick('uf', dados.ufTotal[els[0].index].uf) } }
+
+  // ranking de produtos: filtra quando há realce
+  const tabProd = sel
+    ? tabelaAgrupada(linhas,'produto',sel).map(d=>({ produto:d.chave, qtde:d.qtd, valor:d.valor, pct:d.pct })).slice(0,80)
+    : (dados?.tabelaProdutos || [])
+
   return (
     <div style={{ minHeight:'100vh',background:'#f4f6fb',fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:13 }}>
       <Head><title>Clamalu · Produto</title></Head>
@@ -101,6 +151,8 @@ export default function Produto({ user }) {
         <button style={{ marginLeft:'auto',padding:'6px 16px',borderRadius:8,border:'none',background:'#16a34a',color:'white',fontSize:12,fontWeight:600,cursor:'pointer' }} onClick={exportar}>⬇ Exportar Excel</button>
       </div>
 
+      <RealceBanner sel={sel} onClear={() => setSel(null)} />
+
       <div style={st.kpiBar}>
         <div style={st.kpi}><div style={st.kpiVal}>{loading?'...':fmtN(dados?.kpis?.qtde)}</div><div style={st.kpiLbl}>Total Produtos</div></div>
         <div style={{ ...st.kpi,borderRight:'none' }}><div style={st.kpiVal}>{loading?'...':fmtVal(dados?.kpis?.valor)}</div><div style={st.kpiLbl}>Valor Total</div></div>
@@ -112,16 +164,12 @@ export default function Produto({ user }) {
           {/* TOP 5 */}
           <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
             <div style={st.card}>
-              <div style={st.cardTitle}>Top 5 por valor</div>
-              <div style={{ height:200 }}>
-                <Bar data={{ labels:dados?.top5Valor?.map(p=>p.produto.length>20?p.produto.slice(0,20)+'…':p.produto)||[], datasets:[{ data:dados?.top5Valor?.map(p=>p.valor)||[], backgroundColor:AZUIS, borderRadius:4 }] }} options={{ indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f2f8'}},y:{grid:{display:false}}} }} />
-              </div>
+              <div style={st.cardTitle}>Top 5 por valor <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· clique para realçar</span></div>
+              <div style={{ height:200 }}><Bar data={bV.data} options={bV.opts} /></div>
             </div>
             <div style={st.card}>
               <div style={st.cardTitle}>Top 5 por quantidade</div>
-              <div style={{ height:200 }}>
-                <Bar data={{ labels:dados?.top5Qtde?.map(p=>p.produto.length>20?p.produto.slice(0,20)+'…':p.produto)||[], datasets:[{ data:dados?.top5Qtde?.map(p=>p.qtde)||[], backgroundColor:AZUIS, borderRadius:4 }] }} options={{ indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f2f8'}},y:{grid:{display:false}}} }} />
-              </div>
+              <div style={{ height:200 }}><Bar data={bQ.data} options={bQ.opts} /></div>
             </div>
           </div>
 
@@ -181,16 +229,16 @@ export default function Produto({ user }) {
           {/* PIZZA UF + TABELA */}
           <div style={{ display:'grid',gridTemplateColumns:'1fr 2fr',gap:16 }}>
             <div style={st.card}>
-              <div style={st.cardTitle}>Participação por estado</div>
+              <div style={st.cardTitle}>Participação por estado <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· clique p/ realçar</span></div>
               <div style={{ display:'flex',alignItems:'center',gap:16 }}>
                 <div style={{ width:140,height:140 }}>
-                  <Doughnut data={{ labels:dados?.ufTotal?.map(u=>u.uf)||[], datasets:[{ data:dados?.ufTotal?.map(u=>u.pct)||[], backgroundColor:dados?.ufTotal?.map(u=>COR_UFS[u.uf]||'#9ca3af')||[], borderWidth:3,borderColor:'#fff' }] }} options={{ cutout:'55%',responsive:true,plugins:{legend:{display:false}} }} />
+                  <Doughnut data={dough} options={doughOpts} />
                 </div>
                 <div style={{ flex:1 }}>
                   {dados?.ufTotal?.map((u,i)=>(
-                    <div key={i} style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8 }}>
+                    <div key={i} onClick={()=>pick('uf',u.uf)} style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8,cursor:'pointer',opacity:contribui(linhas,'uf',u.uf,sel)?1:0.4 }}>
                       <div style={{ width:10,height:10,borderRadius:2,background:COR_UFS[u.uf]||'#9ca3af' }}/>
-                      <span style={{ fontSize:12,fontWeight:600,flex:1 }}>{u.uf}</span>
+                      <span style={{ fontSize:12,fontWeight:isSel('uf',u.uf)?800:600,flex:1 }}>{u.uf}</span>
                       <span style={{ fontSize:12,fontWeight:700,color:'#1341c4' }}>{u.pct}%</span>
                     </div>
                   ))}
@@ -198,19 +246,22 @@ export default function Produto({ user }) {
               </div>
             </div>
             <div style={st.card}>
-              <div style={st.cardTitle}>Ranking completo de produtos</div>
+              <div style={st.cardTitle}>Ranking completo de produtos {sel && <span style={{ fontWeight:500,textTransform:'none',color:'#ea8c00' }}>· filtrado por {sel.value}</span>}</div>
               <div style={{ maxHeight:280,overflowY:'auto' }}>
                 <table style={{ width:'100%',borderCollapse:'collapse' }}>
                   <thead><tr><th style={st.th}>#</th><th style={st.th}>Produto</th><th style={{ ...st.th,textAlign:'right' }}>% Valor</th><th style={{ ...st.th,textAlign:'right' }}>QTDE</th><th style={{ ...st.th,textAlign:'right' }}>Valor</th></tr></thead>
-                  <tbody>{dados?.tabelaProdutos?.map((p,i)=>(
-                    <tr key={i} onMouseEnter={e=>e.currentTarget.style.background='#f7f9ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
+                  <tbody>
+                    {tabProd.length===0 && <tr><td style={{ ...st.td,color:'#9aa6bf' }} colSpan={5}>Nenhum produto para este realce.</td></tr>}
+                    {tabProd.map((p,i)=>(
+                    <tr key={i} onClick={()=>pick('produto',p.produto)} style={{ cursor:'pointer',background:isSel('produto',p.produto)?'#e8eeff':'' }}>
                       <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
                       <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{p.produto}</td>
                       <td style={{ ...st.td,textAlign:'right' }}>{p.pct}%</td>
                       <td style={{ ...st.td,textAlign:'right' }}>{fmtN(p.qtde)}</td>
                       <td style={{ ...st.td,textAlign:'right',fontWeight:700 }}>{fmtVal(p.valor)}</td>
                     </tr>
-                  ))}</tbody>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>

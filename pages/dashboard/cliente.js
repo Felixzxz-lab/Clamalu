@@ -5,6 +5,8 @@ import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
 import { Line, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
+import { fade, contribui, tabelaAgrupada } from '../../lib/realce'
+import { RealceBanner } from '../../components/realce'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
 const COR_UFS = { GO:'#1341c4',MT:'#16a34a',PA:'#dc2626',TO:'#ea8c00',RO:'#7c3aed',DF:'#0891b2' }
@@ -19,6 +21,7 @@ export default function Cliente({ user }) {
   const [fMes, setFMes] = useState('')
   const [fVend, setFVend] = useState('')
   const [cliAtivo, setCliAtivo] = useState(null)
+  const [sel, setSel] = useState(null)
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
   useEffect(() => { if (dados?.top5Cli?.length) setCliAtivo(dados.top5Cli[0]) }, [dados])
@@ -32,8 +35,17 @@ export default function Cliente({ user }) {
     const r = await fetch('/api/dados/cliente?' + p)
     if (r.status === 401) { router.push('/'); return }
     setDados(await r.json())
+    setSel(null)
     setLoading(false)
   }
+
+  const linhas = dados?.linhas || []
+  function pick(dim, value) {
+    if (!value) return
+    setSel(s => (s && s.dim === dim && s.value === value) ? null : { dim, value })
+    if (dim === 'cliente' && dados?.cliMesPct?.[value]) setCliAtivo(value)
+  }
+  const isSel = (dim, value) => sel && sel.dim === dim && sel.value === value
 
   async function exportar() {
     const XLSX = await import('xlsx')
@@ -65,6 +77,21 @@ export default function Cliente({ user }) {
   const cliMesData = dados && cliAtivo && dados.cliMesPct?.[cliAtivo]
   const mesesLabel = dados?.meses?.map(m => { const [y,mo]=m.split('-'); return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(mo)-1]+'/'+y.slice(2) }) || []
 
+  // ranking completo de clientes: filtra quando há realce
+  const ranking = sel
+    ? tabelaAgrupada(linhas,'cliente',sel).map(d=>({ cliente:d.chave, uf:d.uf, qtd:d.qtd, valor:d.valor, pct:d.pct })).slice(0,80)
+    : (dados?.ranking || [])
+
+  // doughnut UF
+  const dough = {
+    labels: dados?.ufTotal?.map(u=>u.uf) || [],
+    datasets:[{ data: dados?.ufTotal?.map(u=>u.pct) || [],
+      backgroundColor: dados?.ufTotal?.map(u => contribui(linhas,'uf',u.uf,sel) ? (COR_UFS[u.uf]||'#9ca3af') : fade(COR_UFS[u.uf]||'#9ca3af')) || [],
+      borderWidth:3, borderColor:'#fff' }]
+  }
+  const doughOpts = { cutout:'55%', responsive:true, plugins:{legend:{display:false}},
+    onClick:(e,els)=>{ if(els.length) pick('uf', dados.ufTotal[els[0].index].uf) } }
+
   return (
     <div style={{ minHeight:'100vh',background:'#f4f6fb',fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:13 }}>
       <Head><title>Clamalu · Cliente</title></Head>
@@ -92,6 +119,8 @@ export default function Cliente({ user }) {
         <button style={{ marginLeft:'auto',padding:'6px 16px',borderRadius:8,border:'none',background:'#16a34a',color:'white',fontSize:12,fontWeight:600,cursor:'pointer' }} onClick={exportar}>⬇ Exportar Excel</button>
       </div>
 
+      <RealceBanner sel={sel} onClear={() => setSel(null)} />
+
       <div style={st.kpiBar}>
         <div style={st.kpi}><div style={st.kpiVal}>{loading?'...':fmtN(dados?.kpis?.qtde)}</div><div style={st.kpiLbl}>Total Produtos</div></div>
         <div style={{ ...st.kpi,borderRight:'none' }}><div style={st.kpiVal}>{loading?'...':fmtVal(dados?.kpis?.valor)}</div><div style={st.kpiLbl}>Valor Total</div></div>
@@ -113,8 +142,10 @@ export default function Cliente({ user }) {
                 </div>
                 <table style={{ width:'100%',borderCollapse:'collapse' }}>
                   <thead><tr><th style={st.th}>#</th><th style={st.th}>Cliente</th><th style={st.th}>UF</th><th style={{ ...st.th,textAlign:'right' }}>%</th><th style={{ ...st.th,textAlign:'right' }}>Acum.</th><th style={{ ...st.th,textAlign:'right' }}>Valor</th></tr></thead>
-                  <tbody>{data?.map((c,i)=>(
-                    <tr key={i} onMouseEnter={e=>e.currentTarget.style.background='#f7f9ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
+                  <tbody>{data?.map((c,i)=>{
+                    const on = contribui(linhas,'cliente',c.cliente,sel)
+                    return (
+                    <tr key={i} onClick={()=>pick('cliente',c.cliente)} style={{ cursor:'pointer',opacity:on?1:0.3,background:isSel('cliente',c.cliente)?'#e8eeff':'' }}>
                       <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
                       <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{c.cliente}</td>
                       <td style={st.td}><span style={{ padding:'2px 8px',borderRadius:5,fontSize:10,fontWeight:700,background:'#e8eeff',color:'#1341c4' }}>{c.uf}</span></td>
@@ -122,7 +153,7 @@ export default function Cliente({ user }) {
                       <td style={{ ...st.td,textAlign:'right',fontWeight:700,color:cor }}>{c.acumulado}%</td>
                       <td style={{ ...st.td,textAlign:'right',fontWeight:700 }}>{fmtVal(c.valor)}</td>
                     </tr>
-                  ))}</tbody>
+                  )})}</tbody>
                 </table>
               </div>
             ))}
@@ -148,12 +179,14 @@ export default function Cliente({ user }) {
           {/* RANKING + UF */}
           <div style={{ display:'grid',gridTemplateColumns:'2fr 1fr',gap:16 }}>
             <div style={st.card}>
-              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:14 }}>Ranking completo de clientes</div>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:14 }}>Ranking completo de clientes {sel && <span style={{ fontWeight:500,textTransform:'none',color:'#ea8c00' }}>· filtrado por {sel.value}</span>}</div>
               <div style={{ maxHeight:300,overflowY:'auto' }}>
                 <table style={{ width:'100%',borderCollapse:'collapse' }}>
                   <thead><tr><th style={st.th}>#</th><th style={st.th}>Cliente</th><th style={st.th}>UF</th><th style={{ ...st.th,textAlign:'right' }}>QTDE</th><th style={{ ...st.th,textAlign:'right' }}>%</th><th style={{ ...st.th,textAlign:'right' }}>Valor</th></tr></thead>
-                  <tbody>{dados?.ranking?.map((c,i)=>(
-                    <tr key={i} onMouseEnter={e=>e.currentTarget.style.background='#f7f9ff'} onMouseLeave={e=>e.currentTarget.style.background=''}>
+                  <tbody>
+                    {ranking.length===0 && <tr><td style={{ ...st.td,color:'#9aa6bf' }} colSpan={6}>Nenhum cliente para este realce.</td></tr>}
+                    {ranking.map((c,i)=>(
+                    <tr key={i} onClick={()=>pick('cliente',c.cliente)} style={{ cursor:'pointer',background:isSel('cliente',c.cliente)?'#e8eeff':'' }}>
                       <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
                       <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{c.cliente}</td>
                       <td style={st.td}><span style={{ padding:'2px 8px',borderRadius:5,fontSize:10,fontWeight:700,background:'#e8eeff',color:'#1341c4' }}>{c.uf}</span></td>
@@ -161,21 +194,22 @@ export default function Cliente({ user }) {
                       <td style={{ ...st.td,textAlign:'right' }}>{c.pct}%</td>
                       <td style={{ ...st.td,textAlign:'right',fontWeight:700 }}>{fmtVal(c.valor)}</td>
                     </tr>
-                  ))}</tbody>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>
             <div style={st.card}>
-              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:14 }}>Participação por estado</div>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:14 }}>Participação por estado <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· clique p/ realçar</span></div>
               <div style={{ display:'flex',alignItems:'center',gap:16 }}>
                 <div style={{ width:130,height:130 }}>
-                  <Doughnut data={{ labels:dados?.ufTotal?.map(u=>u.uf)||[], datasets:[{ data:dados?.ufTotal?.map(u=>u.pct)||[], backgroundColor:dados?.ufTotal?.map(u=>COR_UFS[u.uf]||'#9ca3af')||[], borderWidth:3,borderColor:'#fff' }] }} options={{ cutout:'55%',responsive:true,plugins:{legend:{display:false}} }} />
+                  <Doughnut data={dough} options={doughOpts} />
                 </div>
                 <div style={{ flex:1 }}>
                   {dados?.ufTotal?.map((u,i)=>(
-                    <div key={i} style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8 }}>
+                    <div key={i} onClick={()=>pick('uf',u.uf)} style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8,cursor:'pointer',opacity:contribui(linhas,'uf',u.uf,sel)?1:0.4 }}>
                       <div style={{ width:10,height:10,borderRadius:2,background:COR_UFS[u.uf]||'#9ca3af' }}/>
-                      <span style={{ fontSize:12,fontWeight:600,flex:1 }}>{u.uf}</span>
+                      <span style={{ fontSize:12,fontWeight:isSel('uf',u.uf)?800:600,flex:1 }}>{u.uf}</span>
                       <span style={{ fontSize:11,color:'#6b7a99' }}>{u.clientes} cli.</span>
                       <span style={{ fontSize:12,fontWeight:700,color:'#1341c4' }}>{u.pct}%</span>
                     </div>

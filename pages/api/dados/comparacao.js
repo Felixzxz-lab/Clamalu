@@ -51,5 +51,7 @@ export default requireAuth(async function handler(req, res) {
     }
   })
 
-  return res.status(200).json({ mensal, vendMes, totaisPorAno, anos: anosArr })
+  const linhas = data.map(r => ({ ano: r.ano, mes: r.mes, vendedor: r.vendedor, qtde: r.qtde, valor_total: r.valor_total }))
+
+  return res.status(200).json({ mensal, vendMes, totaisPorAno, anos: anosArr, linhas })
 })

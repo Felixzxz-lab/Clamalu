@@ -84,11 +84,13 @@ export default requireAuth(async function handler(req, res) {
     clientes: d.clientes.size
   })).sort((a, b) => b.valor - a.valor)
 
+  const linhas = data.map(r => ({ cliente: r.cliente, uf: r.uf, cidade: r.cidade, vendedor: r.vendedor, qtde: r.qtde, valor_total: r.valor_total }))
+
   return res.status(200).json({
     kpis: { qtde: totalQtde, valor: Math.round(totalValor * 100) / 100, clientes: totalClientes },
     ranking: ranking.slice(0, 20),
     cli30, cli50,
     cliMesPct, meses: mesesOrdenados,
-    top5Cli, ufTotal
+    top5Cli, ufTotal, linhas
   })
 })

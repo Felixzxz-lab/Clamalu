@@ -5,6 +5,7 @@ import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
 import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
+import { RealceBanner } from '../../components/realce'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
 const CORES_ANO = { 2024:'#93aafc', 2025:'#1341c4', 2026:'#16a34a' }
@@ -21,8 +22,16 @@ export default function Comparacao({ user }) {
   const [anos, setAnos] = useState([2025, 2026])
   const [mesesSel, setMesesSel] = useState([])
   const [fVend, setFVend] = useState('')
+  const [sel, setSel] = useState(null) // realce de série: { dim:'ano'|'vendedor', value }
 
   useEffect(() => { carregar() }, [anos, mesesSel, fVend])
+
+  // série "apagada"? (há realce, é da mesma dimensão, mas não é a selecionada)
+  const off = (dim, val) => sel && sel.dim === dim && sel.value !== val
+  function pick(dim, value) {
+    if (value == null) return
+    setSel(s => (s && s.dim === dim && String(s.value) === String(value)) ? null : { dim, value })
+  }
 
   async function carregar() {
     if (!anos.length) return
@@ -34,6 +43,7 @@ export default function Comparacao({ user }) {
     const r = await fetch('/api/dados/comparacao?' + p)
     if (r.status === 401) { router.push('/'); return }
     setDados(await r.json())
+    setSel(null)
     setLoading(false)
   }
 
@@ -122,6 +132,8 @@ export default function Comparacao({ user }) {
         </div>
       </div>
 
+      <RealceBanner sel={sel} onClear={() => setSel(null)} />
+
       {/* KPIs */}
       <div style={st.kpiBar}>
         {anos.map(a=>(
@@ -151,7 +163,7 @@ export default function Comparacao({ user }) {
               </div>
             </div>
             <div style={{ height:260 }}>
-              <Line data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.valor||null), borderColor:CORES_ANO[a], backgroundColor:CORES_ANO[a]+'18', borderWidth:2.5, pointRadius:4, fill:anos.indexOf(a)===0, tension:0.4, spanGaps:true, borderDash:a===2024?[5,4]:[] })) }} options={{ responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw||0)}`}}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
+              <Line data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.valor||null), borderColor:off('ano',a)?CORES_ANO[a]+'22':CORES_ANO[a], backgroundColor:off('ano',a)?'transparent':CORES_ANO[a]+'18', borderWidth:2.5, pointRadius:4, fill:anos.indexOf(a)===0, tension:0.4, spanGaps:true, borderDash:a===2024?[5,4]:[] })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('ano',anos[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw||0)}`}}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
             </div>
           </div>
 
@@ -160,14 +172,14 @@ export default function Comparacao({ user }) {
             <div style={st.card}>
               <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:12 }}>Quantidade mensal</div>
               <div style={{ height:220 }}>
-                <Bar data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.qtde||null), backgroundColor:CORES_ANO[a]+'bb', borderRadius:4, borderSkipped:false })) }} options={{ responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:10}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{font:{size:10}}}} }} />
+                <Bar data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.qtde||null), backgroundColor:off('ano',a)?CORES_ANO[a]+'18':CORES_ANO[a]+'bb', borderRadius:4, borderSkipped:false })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('ano',anos[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:10}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{font:{size:10}}}} }} />
               </div>
             </div>
             {/* VENDEDOR */}
             <div style={st.card}>
               <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:12 }}>Valor por vendedor — {anos[anos.length-1]}</div>
               <div style={{ height:220 }}>
-                <Line data={{ labels, datasets: Object.keys(CORES_VEND).filter(v=>dados?.vendMes?.[v]).map(v=>({ label:v, data:mesesAtivos.map(m=>dados?.vendMes?.[v]?.[anos[anos.length-1]]?.[m]||null), borderColor:CORES_VEND[v], backgroundColor:'transparent', borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true })) }} options={{ responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:8}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
+                <Line data={{ labels, datasets: Object.keys(CORES_VEND).filter(v=>dados?.vendMes?.[v]).map(v=>({ label:v, data:mesesAtivos.map(m=>dados?.vendMes?.[v]?.[anos[anos.length-1]]?.[m]||null), borderColor:off('vendedor',v)?CORES_VEND[v]+'2e':CORES_VEND[v], backgroundColor:'transparent', borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('vendedor',Object.keys(CORES_VEND).filter(v=>dados?.vendMes?.[v])[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:8}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
               </div>
             </div>
           </div>
