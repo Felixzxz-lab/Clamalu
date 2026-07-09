@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 
-const PAGINAS = ['vendedor','produto','cliente','comparacao']
+const PAGINAS = ['vendedor','produto','cliente','comparacao','financeiro']
+const PAGINAS_PADRAO = ['vendedor','produto','cliente','comparacao'] // novos usuários (financeiro é concedido à parte)
 
 export default function Admin({ user }) {
   const router = useRouter()
@@ -20,6 +21,13 @@ export default function Admin({ user }) {
   const [previa, setPrevia] = useState(null)      // { abas: [...] }
   const [abasSel, setAbasSel] = useState([])      // nomes de abas marcadas
   const [limparAntes, setLimparAntes] = useState(false)
+  // importação de DESPESAS (financeiro) — estado próprio
+  const fileRefD = useRef()
+  const [arqD, setArqD] = useState(null)       // { base64, nome }
+  const [previaD, setPreviaD] = useState(null) // { abas: [...] }
+  const [abasSelD, setAbasSelD] = useState([])
+  const [uploadingD, setUploadingD] = useState(false)
+  const [uploadMsgD, setUploadMsgD] = useState('')
 
   useEffect(() => { carregarUsuarios(); carregarUploads() }, [])
 
@@ -125,6 +133,65 @@ export default function Admin({ user }) {
     setUploading(false)
   }
 
+  // ---- Importação de DESPESAS (financeiro) ----
+  function resetImportD() {
+    setArqD(null); setPreviaD(null); setAbasSelD([]); setUploadMsgD('')
+    if (fileRefD.current) fileRefD.current.value = ''
+  }
+
+  async function escolherArquivoD(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploadingD(true); setPreviaD(null); setUploadMsgD('Lendo e analisando o arquivo...')
+    const reader = new FileReader()
+    reader.onload = async (ev) => {
+      const base64 = ev.target.result.split(',')[1]
+      try {
+        const r = await fetch('/api/admin/preview-despesas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileData: base64 })
+        })
+        const d = await r.json()
+        if (!r.ok) { setUploadMsgD('❌ Erro: ' + d.error); setUploadingD(false); return }
+        setArqD({ base64, nome: file.name })
+        setPreviaD(d)
+        const comDados = d.abas.filter(a => a.ok && a.totalRegistros > 0)
+        setAbasSelD(comDados.length ? [comDados[0].nome] : [])
+        setUploadMsgD('')
+      } catch (err) {
+        setUploadMsgD('❌ Erro ao ler o arquivo: ' + err.message)
+      }
+      setUploadingD(false)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const toggleAbaD = (nome) => setAbasSelD(s => s.includes(nome) ? s.filter(x => x !== nome) : [...s, nome])
+
+  async function confirmarImportD() {
+    if (!arqD || !abasSelD.length) return
+    const abasImp = previaD.abas.filter(a => abasSelD.includes(a.nome))
+    const anos = [...new Set(abasImp.map(a => a.ano))].join(', ')
+    if (!confirm(`Isto vai SUBSTITUIR as despesas do(s) ano(s) ${anos} pelos dados deste arquivo. Continuar?`)) return
+    setUploadingD(true); setUploadMsgD('Importando...')
+    try {
+      const r = await fetch('/api/admin/upload-despesas', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileData: arqD.base64, fileName: arqD.nome, sheets: abasSelD })
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setUploadMsgD(`✅ ${d.total.toLocaleString('pt-BR')} lançamentos importados (${d.valorTotal.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}) — ano(s) ${d.anos.join(', ')}.`)
+        resetImportD(); carregarUploads()
+      } else {
+        setUploadMsgD('❌ Erro: ' + d.error)
+      }
+    } catch (err) {
+      setUploadMsgD('❌ Erro: ' + err.message)
+    }
+    setUploadingD(false)
+  }
+
   async function sair() {
     await fetch('/api/auth/logout', { method:'POST' })
     router.push('/')
@@ -160,7 +227,8 @@ export default function Admin({ user }) {
           </div>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <button style={st.tab('usuarios')} onClick={()=>setAba('usuarios')}>👥 Usuários</button>
-            <button style={st.tab('planilha')} onClick={()=>setAba('planilha')}>📊 Planilha</button>
+            <button style={st.tab('planilha')} onClick={()=>setAba('planilha')}>📊 Vendas</button>
+            <button style={st.tab('despesas')} onClick={()=>setAba('despesas')}>💰 Despesas</button>
             <button style={st.tab('uploads')} onClick={()=>setAba('uploads')}>📋 Histórico</button>
             <div style={{width:1,height:20,background:'rgba(255,255,255,0.2)',margin:'0 8px'}}></div>
             <button onClick={()=>router.push('/dashboard/vendedor')} style={{...st.btn,background:'rgba(255,255,255,0.15)',fontSize:11}}>Ver Dashboard</button>
@@ -209,7 +277,7 @@ export default function Admin({ user }) {
                   {msg && <p style={{color: msg.includes('Erro')?'#dc2626':'#16a34a',fontSize:12,marginBottom:10}}>{msg}</p>}
                   <div style={{display:'flex',gap:8}}>
                     <button type="submit" style={st.btn}>{editId ? 'Salvar alterações' : 'Criar usuário'}</button>
-                    {editId && <button type="button" onClick={()=>{setEditId(null);setForm({nome:'',email:'',senha:'',role:'cliente',paginas:PAGINAS})}} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>}
+                    {editId && <button type="button" onClick={()=>{setEditId(null);setForm({nome:'',email:'',senha:'',role:'cliente',paginas:PAGINAS_PADRAO})}} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>}
                   </div>
                 </form>
               </div>
@@ -328,6 +396,85 @@ export default function Admin({ user }) {
               {uploadMsg && (
                 <div style={{marginTop:16,padding:'12px 16px',borderRadius:8,background: uploadMsg.includes('✅')?'#dcfce7':'#fef2f2',color: uploadMsg.includes('✅')?'#15803d':'#dc2626',fontSize:13,fontWeight:600}}>
                   {uploadMsg}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ABA DESPESAS (financeiro) */}
+          {aba === 'despesas' && (
+            <div style={st.card}>
+              <h3 style={{fontSize:13,fontWeight:700,color:'#0f1729',marginBottom:8}}>💰 Importar planilha de despesas</h3>
+              <p style={{fontSize:12,color:'#6b7a99',marginBottom:20}}>Formato matriz (fornecedor × mês), como a “RESUMO DESPESAS CLAMALU”. O ano é lido do nome da aba (ex.: “CLAMALU 2026”). A importação <strong>substitui</strong> as despesas do ano — pode re-subir a mesma planilha todo mês sem duplicar.</p>
+
+              {!previaD && (
+                <div style={{border:'2px dashed #e2e6f0',borderRadius:12,padding:40,textAlign:'center',background:'#f9fafb',marginBottom:16}}>
+                  <div style={{fontSize:40,marginBottom:12}}>📂</div>
+                  <p style={{fontSize:13,fontWeight:600,color:'#0f1729',marginBottom:4}}>Selecione a planilha de despesas</p>
+                  <p style={{fontSize:11,color:'#6b7a99',marginBottom:16}}>Formatos aceitos: .ods, .xlsx, .xls</p>
+                  <input ref={fileRefD} type="file" accept=".ods,.xlsx,.xls" onChange={escolherArquivoD} style={{display:'none'}} id="fileInputD" />
+                  <label htmlFor="fileInputD" style={{...st.btnVerde,cursor:'pointer',display:'inline-block',padding:'10px 24px'}}>
+                    {uploadingD ? '⏳ Analisando...' : '📤 Selecionar arquivo'}
+                  </label>
+                </div>
+              )}
+
+              {previaD && (
+                <div>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                    <div style={{fontSize:12,color:'#0f1729'}}>📄 <strong>{arqD?.nome}</strong> — marque as abas que deseja importar:</div>
+                    <button onClick={resetImportD} style={{...st.btn,background:'#6b7a99',fontSize:11}}>Trocar arquivo</button>
+                  </div>
+
+                  {previaD.abas.map(a => {
+                    if (!a.ok) return (
+                      <div key={a.nome} style={{border:'1.5px solid #fed7aa',borderRadius:10,padding:16,marginBottom:12,background:'#fff7ed'}}>
+                        <span style={{fontSize:13,fontWeight:700,color:'#0f1729'}}>{a.nome}</span>
+                        <span style={{fontSize:11,color:'#b45309',marginLeft:8}}>⚠️ {a.erro}</span>
+                      </div>
+                    )
+                    const sel = abasSelD.includes(a.nome)
+                    const vazia = a.totalRegistros === 0
+                    const MESN = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+                    return (
+                      <div key={a.nome} style={{border:`1.5px solid ${sel?'#1341c4':'#e2e6f0'}`,borderRadius:10,padding:16,marginBottom:12,background:sel?'#f7f9ff':'white',opacity:vazia?0.55:1}}>
+                        <label style={{display:'flex',alignItems:'center',gap:10,cursor:vazia?'not-allowed':'pointer',marginBottom:sel?12:0}}>
+                          <input type="checkbox" checked={sel} disabled={vazia} onChange={()=>toggleAbaD(a.nome)} />
+                          <span style={{fontSize:13,fontWeight:700,color:'#0f1729'}}>{a.nome}</span>
+                          <span style={{fontSize:11,color:'#6b7a99'}}>
+                            Ano <strong>{a.ano}</strong> · {a.totalRegistros.toLocaleString('pt-BR')} lançamentos · {a.fornecedores} fornecedores · {a.total.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+                            {a.meses?.length>0 && ` · meses: ${a.meses.map(m=>MESN[m-1]).join(', ')}`}
+                          </span>
+                        </label>
+
+                        {sel && a.grupos?.length > 0 && (
+                          <div style={{marginTop:6}}>
+                            <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.7px',color:'#6b7a99',marginBottom:8}}>Distribuição por grupo</div>
+                            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                              {a.grupos.map(g=>(
+                                <span key={g.grupo} style={{fontSize:11,padding:'4px 10px',borderRadius:8,background:'#eef2ff',color:'#1341c4',fontWeight:600}}>
+                                  {g.grupo}: {g.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  <div style={{display:'flex',gap:8,alignItems:'center',marginTop:14}}>
+                    <button onClick={confirmarImportD} disabled={uploadingD || !abasSelD.length} style={{...st.btnVerde,padding:'10px 24px',opacity:(uploadingD||!abasSelD.length)?0.5:1,cursor:(uploadingD||!abasSelD.length)?'not-allowed':'pointer'}}>
+                      {uploadingD ? '⏳ Importando...' : `✅ Confirmar importação (${abasSelD.length} aba${abasSelD.length!==1?'s':''})`}
+                    </button>
+                    <button onClick={resetImportD} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>
+                  </div>
+                </div>
+              )}
+
+              {uploadMsgD && (
+                <div style={{marginTop:16,padding:'12px 16px',borderRadius:8,background: uploadMsgD.includes('✅')?'#dcfce7':'#fef2f2',color: uploadMsgD.includes('✅')?'#15803d':'#dc2626',fontSize:13,fontWeight:600}}>
+                  {uploadMsgD}
                 </div>
               )}
             </div>

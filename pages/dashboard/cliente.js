@@ -22,10 +22,14 @@ export default function Cliente({ user }) {
   const [fMes, setFMes] = useState([])
   const [fVend, setFVend] = useState([])
   const [cliAtivo, setCliAtivo] = useState(null)
+  const [cliCompra, setCliCompra] = useState(null) // cliente selecionado p/ "o que comprou"
   const [sel, setSel] = useState(null)
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
-  useEffect(() => { if (dados?.top5Cli?.length) setCliAtivo(dados.top5Cli[0]) }, [dados])
+  useEffect(() => {
+    if (dados?.top5Cli?.length) setCliAtivo(dados.top5Cli[0])
+    if (dados?.cli50?.length) setCliCompra(dados.cli50[0].cliente)
+  }, [dados])
 
   async function carregar() {
     setLoading(true)
@@ -44,8 +48,16 @@ export default function Cliente({ user }) {
   function pick(dim, value) {
     if (!value) return
     setSel(s => (s && s.dim === dim && s.value === value) ? null : { dim, value })
-    if (dim === 'cliente' && dados?.cliMesPct?.[value]) setCliAtivo(value)
+    if (dim === 'cliente') { setCliCompra(value); if (dados?.cliMesPct?.[value]) setCliAtivo(value) }
   }
+  // produtos comprados pelo cliente selecionado (no período filtrado)
+  const comprasCliente = (() => {
+    if (!cliCompra) return []
+    const p = {}
+    for (const r of linhas) { if (r.cliente !== cliCompra) continue; if (!p[r.produto]) p[r.produto] = { qtde: 0, valor: 0 }; p[r.produto].qtde += r.qtde; p[r.produto].valor += r.valor_total }
+    return Object.entries(p).map(([produto, d]) => ({ produto, qtde: d.qtde, valor: Math.round(d.valor * 100) / 100 })).sort((a, b) => b.valor - a.valor).slice(0, 25)
+  })()
+  const totalCompra = comprasCliente.reduce((s, r) => s + r.valor, 0)
   const isSel = (dim, value) => sel && sel.dim === dim && sel.value === value
 
   async function exportar() {
@@ -102,7 +114,7 @@ export default function Cliente({ user }) {
           <div><div style={{ color:'white',fontSize:16,fontWeight:700 }}>Clamalu</div><div style={{ color:'rgba(255,255,255,0.5)',fontSize:11 }}>Representações · Insumos</div></div>
         </div>
         <div style={{ display:'flex',gap:4 }}>
-          {['vendedor','produto','cliente','comparacao'].filter(p=>user?.paginas?.includes(p)).map(p=>(
+          {['vendedor','produto','cliente','comparacao','financeiro'].filter(p=>user?.paginas?.includes(p)).map(p=>(
             <button key={p} onClick={()=>router.push('/dashboard/'+p)} style={{ padding:'7px 18px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,textTransform:'uppercase',background:p==='cliente'?'white':'rgba(255,255,255,0.1)',color:p==='cliente'?'#0b2a8a':'rgba(255,255,255,0.75)' }}>
               {p==='comparacao'?'Comparação':p.charAt(0).toUpperCase()+p.slice(1)}
             </button>
@@ -130,34 +142,60 @@ export default function Cliente({ user }) {
 
       {loading?<div style={{ padding:40,textAlign:'center',color:'#6b7a99' }}>Carregando dados...</div>:(
         <div style={st.page}>
-          {/* REPRESENTATIVIDADE */}
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
-            {[{label:'50%',cor:'#1341c4',bg:'#dbeafe',data:dados?.cli50},{label:'30%',cor:'#16a34a',bg:'#dcfce7',data:dados?.cli30}].map(({label,cor,bg,data})=>(
-              <div key={label} style={st.card}>
-                <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10 }}>
-                  <span style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99' }}>Clientes que representam {label} do faturamento</span>
-                  <span style={{ padding:'3px 10px',borderRadius:20,background:bg,color:cor,fontSize:11,fontWeight:700 }}>{data?.length} clientes</span>
-                </div>
-                <div style={{ width:'100%',height:8,background:'#f4f6fb',borderRadius:4,marginBottom:14,overflow:'hidden' }}>
-                  <div style={{ width:(data?.[data.length-1]?.acumulado||0)+'%',height:'100%',background:cor,borderRadius:4 }}/>
-                </div>
+          {/* REPRESENTATIVIDADE 50% + O QUE O CLIENTE COMPROU */}
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start' }}>
+            {/* 50% do faturamento */}
+            <div style={st.card}>
+              <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10 }}>
+                <span style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99' }}>Clientes que representam 50% do faturamento</span>
+                <span style={{ padding:'3px 10px',borderRadius:20,background:'#dbeafe',color:'#1341c4',fontSize:11,fontWeight:700 }}>{dados?.cli50?.length} clientes</span>
+              </div>
+              <div style={{ width:'100%',height:8,background:'#f4f6fb',borderRadius:4,marginBottom:12,overflow:'hidden' }}>
+                <div style={{ width:(dados?.cli50?.[dados.cli50.length-1]?.acumulado||0)+'%',height:'100%',background:'#1341c4',borderRadius:4 }}/>
+              </div>
+              <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:8 }}>Clique num cliente para ver o que ele comprou →</div>
+              <div style={{ maxHeight:320,overflowY:'auto' }}>
                 <table style={{ width:'100%',borderCollapse:'collapse' }}>
                   <thead><tr><th style={st.th}>#</th><th style={st.th}>Cliente</th><th style={st.th}>UF</th><th style={{ ...st.th,textAlign:'right' }}>%</th><th style={{ ...st.th,textAlign:'right' }}>Acum.</th><th style={{ ...st.th,textAlign:'right' }}>Valor</th></tr></thead>
-                  <tbody>{data?.map((c,i)=>{
-                    const on = contribui(linhas,'cliente',c.cliente,sel)
-                    return (
-                    <tr key={i} onClick={()=>pick('cliente',c.cliente)} style={{ cursor:'pointer',opacity:on?1:0.3,background:isSel('cliente',c.cliente)?'#e8eeff':'' }}>
+                  <tbody>{dados?.cli50?.map((c,i)=>(
+                    <tr key={i} onClick={()=>pick('cliente',c.cliente)} style={{ cursor:'pointer',background:cliCompra===c.cliente?'#e8f7ee':(isSel('cliente',c.cliente)?'#e8eeff':'') }}>
                       <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
-                      <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{c.cliente}</td>
+                      <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{c.cliente}{cliCompra===c.cliente&&<span style={{ marginLeft:6,fontSize:9,fontWeight:800,color:'#15803d',background:'#dcfce7',padding:'1px 6px',borderRadius:10 }}>🖱️</span>}</td>
                       <td style={st.td}><span style={{ padding:'2px 8px',borderRadius:5,fontSize:10,fontWeight:700,background:'#e8eeff',color:'#1341c4' }}>{c.uf}</span></td>
                       <td style={{ ...st.td,textAlign:'right' }}>{c.pct}%</td>
-                      <td style={{ ...st.td,textAlign:'right',fontWeight:700,color:cor }}>{c.acumulado}%</td>
+                      <td style={{ ...st.td,textAlign:'right',fontWeight:700,color:'#1341c4' }}>{c.acumulado}%</td>
                       <td style={{ ...st.td,textAlign:'right',fontWeight:700 }}>{fmtVal(c.valor)}</td>
                     </tr>
-                  )})}</tbody>
+                  ))}</tbody>
                 </table>
               </div>
-            ))}
+            </div>
+            {/* O que o cliente comprou no período */}
+            <div style={st.card}>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:10 }}>O que o cliente comprou no período</div>
+              {cliCompra ? (
+                <>
+                  <div style={{ fontSize:12,fontWeight:700,color:'#0f1729',marginBottom:2 }}>{cliCompra}</div>
+                  <div style={{ fontSize:11,color:'#6b7a99',marginBottom:12 }}>{comprasCliente.length} produtos · {fmtVal(totalCompra)} no total</div>
+                  <div style={{ maxHeight:320,overflowY:'auto' }}>
+                    <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                      <thead><tr><th style={st.th}>#</th><th style={st.th}>Produto</th><th style={{ ...st.th,textAlign:'right' }}>QTDE</th><th style={{ ...st.th,textAlign:'right' }}>Valor</th></tr></thead>
+                      <tbody>
+                        {comprasCliente.length===0&&<tr><td style={{ ...st.td,color:'#9aa6bf' }} colSpan={4}>Sem compras no período.</td></tr>}
+                        {comprasCliente.map((p,i)=>(
+                          <tr key={i}>
+                            <td style={st.td}><span style={{ display:'inline-flex',width:20,height:20,borderRadius:'50%',background:'#f4f6fb',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700 }}>{i+1}</span></td>
+                            <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{p.produto}</td>
+                            <td style={{ ...st.td,textAlign:'right' }}>{fmtN(p.qtde)}</td>
+                            <td style={{ ...st.td,textAlign:'right',fontWeight:700 }}>{fmtVal(p.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : <div style={{ padding:20,textAlign:'center',color:'#9aa6bf',fontSize:12 }}>Clique num cliente ao lado.</div>}
+            </div>
           </div>
 
           {/* % CLIENTE POR MÊS */}

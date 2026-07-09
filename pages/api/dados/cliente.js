@@ -13,7 +13,7 @@ export default requireAuth(async function handler(req, res) {
   let data
   try {
     data = await selectAll(() => {
-      let q = db.from('vendas').select('cliente,uf,cidade,qtde,valor_total,ano,mes,vendedor')
+      let q = db.from('vendas').select('cliente,uf,cidade,produto,qtde,valor_total,ano,mes,vendedor')
       if (anos.length) q = q.in('ano', anos)
       if (meses.length) q = q.in('mes', meses)
       if (vends.length) q = q.in('vendedor', vends)
@@ -86,7 +86,7 @@ export default requireAuth(async function handler(req, res) {
     clientes: d.clientes.size
   })).sort((a, b) => b.valor - a.valor)
 
-  const linhas = data.map(r => ({ cliente: r.cliente, uf: r.uf, cidade: r.cidade, vendedor: r.vendedor, qtde: r.qtde, valor_total: r.valor_total }))
+  const linhas = data.map(r => ({ cliente: r.cliente, uf: r.uf, cidade: r.cidade, produto: r.produto, vendedor: r.vendedor, qtde: r.qtde, valor_total: r.valor_total }))
 
   return res.status(200).json({
     kpis: { qtde: totalQtde, valor: Math.round(totalValor * 100) / 100, clientes: totalClientes },

@@ -50,6 +50,12 @@ export default function Layout({ children, user, titulo }) {
                 Comparação
               </button>
             )}
+            {paginas.includes('financeiro') && (
+              <button onClick={() => router.push('/dashboard/financeiro')}
+                style={{ padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', background: pagina === 'financeiro' ? 'white' : 'rgba(255,255,255,0.1)', color: pagina === 'financeiro' ? '#0b2a8a' : 'rgba(255,255,255,0.75)' }}>
+                Financeiro
+              </button>
+            )}
             {user?.role === 'admin' && (
               <>
                 <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.2)', margin: '0 8px', alignSelf: 'center' }} />

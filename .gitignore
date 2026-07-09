@@ -23,3 +23,10 @@ npm-debug.log*
 CONTRATO*.md
 CONTRATO*.docx
 *.contrato.md
+CONTRATO*.html
+CONTRATO*.pdf
+TERMO*.html
+TERMO*.pdf
+# pasta inteira de documentos (contratos com CPF/CNPJ)
+documentos clamalu/
+documentos*/

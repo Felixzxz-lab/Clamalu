@@ -15,7 +15,7 @@ export default requireAuth(async function handler(req, res) {
   let data
   try {
     data = await selectAll(() => {
-      let q = db.from('vendas').select('ano,mes,vendedor,qtde,valor_total').in('ano', anosArr)
+      let q = db.from('vendas').select('ano,mes,vendedor,cliente,produto,uf,qtde,valor_total').in('ano', anosArr)
       if (mesesArr?.length) q = q.in('mes', mesesArr)
       if (vends.length) q = q.in('vendedor', vends)
       return q
@@ -52,7 +52,7 @@ export default requireAuth(async function handler(req, res) {
     }
   })
 
-  const linhas = data.map(r => ({ ano: r.ano, mes: r.mes, vendedor: r.vendedor, qtde: r.qtde, valor_total: r.valor_total }))
+  const linhas = data.map(r => ({ ano: r.ano, mes: r.mes, vendedor: r.vendedor, cliente: r.cliente, produto: r.produto, uf: r.uf, qtde: r.qtde, valor_total: r.valor_total }))
 
   return res.status(200).json({ mensal, vendMes, totaisPorAno, anos: anosArr, linhas })
 })

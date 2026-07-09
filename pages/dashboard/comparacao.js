@@ -24,6 +24,7 @@ export default function Comparacao({ user }) {
   const [mesesSel, setMesesSel] = useState([])
   const [fVend, setFVend] = useState([])
   const [sel, setSel] = useState(null) // realce de série: { dim:'ano'|'vendedor', value }
+  const [cliComp, setCliComp] = useState(null) // cliente selecionado no comparativo por cliente
 
   useEffect(() => { carregar() }, [anos, mesesSel, fVend])
 
@@ -79,6 +80,28 @@ export default function Comparacao({ user }) {
     td:{padding:'7px 8px',borderBottom:'1px solid #f3f4f6',fontSize:12,color:'#0f1729',textAlign:'right'},
   }
 
+  // ---- Comparativos por produto e por cliente (mês a mês), a partir das linhas ----
+  const linhasC = dados?.linhas || []
+  const aBase = anos[0], aComp = anos[anos.length-1]
+  const doComp = anos.length >= 2 && aBase !== aComp
+  const perLabel = mesesSel.length===1 ? MESES[mesesSel[0]-1] : (mesesSel.length ? mesesSel.map(m=>MESES[m-1]).join(', ') : 'Ano (todos os meses)')
+  const varCell = v => v===null||v===undefined ? <span style={{ color:'#9ca3af' }}>—</span> : <span style={{ color:v>=0?'#16a34a':'#dc2626',fontWeight:700,whiteSpace:'nowrap' }}>{v>=0?'▲':'▼'} {Math.abs(v).toFixed(1)}%</span>
+  function aggComp(key){
+    const m={}
+    for(const r of linhasC){ const o=m[r[key]]=m[r[key]]||{uf:r.uf,v0:0,v1:0}; if(r.ano===aBase)o.v0+=r.valor_total; else if(r.ano===aComp)o.v1+=r.valor_total }
+    return Object.entries(m).map(([k,d])=>({ chave:k, uf:d.uf, v0:Math.round(d.v0*100)/100, v1:Math.round(d.v1*100)/100, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null }))
+  }
+  const porProduto = doComp ? aggComp('produto').sort((a,b)=>b.v0-a.v0) : []
+  const porCliente = doComp ? aggComp('cliente').sort((a,b)=>b.v0-a.v0) : []
+  const produtosQueCairam = doComp ? porProduto.filter(p=>p.v0>0).map(p=>({ ...p, diff:Math.round((p.v1-p.v0)*100)/100 })).sort((a,b)=>a.diff-b.diff).slice(0,10) : []
+  const cliCompSel = (cliComp && porCliente.some(c=>c.chave===cliComp)) ? cliComp : (porCliente[0]?.chave || null)
+  const produtosDoCliente = (() => {
+    if(!cliCompSel) return []
+    const m={}
+    for(const r of linhasC){ if(r.cliente!==cliCompSel) continue; const o=m[r.produto]=m[r.produto]||{v0:0,v1:0}; if(r.ano===aBase)o.v0+=r.valor_total; else if(r.ano===aComp)o.v1+=r.valor_total }
+    return Object.entries(m).map(([k,d])=>({ produto:k, v0:d.v0, v1:d.v1, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null })).sort((a,b)=>b.v0-a.v0).slice(0,12)
+  })()
+
   return (
     <div style={{ minHeight:'100vh',background:'#f4f6fb',fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:13 }}>
       <Head><title>Clamalu · Comparação</title></Head>
@@ -88,7 +111,7 @@ export default function Comparacao({ user }) {
           <div><div style={{ color:'white',fontSize:16,fontWeight:700 }}>Clamalu</div><div style={{ color:'rgba(255,255,255,0.5)',fontSize:11 }}>Representações · Insumos</div></div>
         </div>
         <div style={{ display:'flex',gap:4 }}>
-          {['vendedor','produto','cliente','comparacao'].filter(p=>user?.paginas?.includes(p)).map(p=>(
+          {['vendedor','produto','cliente','comparacao','financeiro'].filter(p=>user?.paginas?.includes(p)).map(p=>(
             <button key={p} onClick={()=>router.push('/dashboard/'+p)} style={{ padding:'7px 18px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,textTransform:'uppercase',background:p==='comparacao'?'white':'rgba(255,255,255,0.1)',color:p==='comparacao'?'#0b2a8a':'rgba(255,255,255,0.75)' }}>
               {p==='comparacao'?'Comparação':p.charAt(0).toUpperCase()+p.slice(1)}
             </button>
@@ -207,6 +230,87 @@ export default function Comparacao({ user }) {
                       <td style={st.td}>{fmtN(q0)}</td><td style={st.td}>{fmtN(q1)}</td><td style={st.td}>{fmtD(dq)}</td>
                     </tr>
                   })}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TOP PRODUTOS QUE CAÍRAM */}
+          {doComp && (
+            <div style={st.card}>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Top 10 produtos que mais caíram — {aBase} → {aComp}</div>
+              <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:14 }}>Período: <strong>{perLabel}</strong> · selecione um único mês nos filtros acima para ver mês a mês.</div>
+              <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                <thead><tr><th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Produto</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>Queda</th><th style={st.th}>Var. %</th></tr></thead>
+                <tbody>
+                  {produtosQueCairam.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={6}>Sem dados para o filtro atual.</td></tr>}
+                  {produtosQueCairam.map((p,i)=>(
+                    <tr key={i}>
+                      <td style={{ ...st.td,textAlign:'left' }}>{i+1}</td>
+                      <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.chave}</td>
+                      <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td>
+                      <td style={{ ...st.td,color:'#dc2626',fontWeight:700 }}>{fmtVal(p.diff)}</td>
+                      <td style={st.td}>{varCell(p.varV)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* COMPARATIVO POR PRODUTO */}
+          {doComp && (
+            <div style={st.card}>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:14 }}>Comparativo por produto — {aBase} vs {aComp} <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· {perLabel}</span></div>
+              <div style={{ maxHeight:340,overflowY:'auto' }}>
+                <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                  <thead><tr><th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Produto</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>Var. %</th></tr></thead>
+                  <tbody>{porProduto.slice(0,30).map((p,i)=>(
+                    <tr key={i}>
+                      <td style={{ ...st.td,textAlign:'left' }}>{i+1}</td>
+                      <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.chave}</td>
+                      <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td><td style={st.td}>{varCell(p.varV)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* COMPARATIVO POR CLIENTE + DRILL */}
+          {doComp && (
+            <div style={{ display:'grid',gridTemplateColumns:'1.3fr 1fr',gap:16,alignItems:'start' }}>
+              <div style={st.card}>
+                <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Comparativo por cliente — {aBase} vs {aComp} <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· {perLabel}</span></div>
+                <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:12 }}>Clique num cliente para ver onde o consumo dele caiu →</div>
+                <div style={{ maxHeight:340,overflowY:'auto' }}>
+                  <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                    <thead><tr><th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Cliente</th><th style={st.th}>UF</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>Var.</th></tr></thead>
+                    <tbody>{porCliente.slice(0,40).map((c,i)=>(
+                      <tr key={i} onClick={()=>setCliComp(c.chave)} style={{ cursor:'pointer',background:cliCompSel===c.chave?'#e8f7ee':'' }}>
+                        <td style={{ ...st.td,textAlign:'left' }}>{i+1}</td>
+                        <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{c.chave}</td>
+                        <td style={st.td}><span style={{ padding:'2px 8px',borderRadius:5,fontSize:10,fontWeight:700,background:'#e8eeff',color:'#1341c4' }}>{c.uf}</span></td>
+                        <td style={st.td}>{fmtVal(c.v0)}</td><td style={st.td}>{fmtVal(c.v1)}</td><td style={st.td}>{varCell(c.varV)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </div>
+              <div style={st.card}>
+                <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Onde o consumo caiu</div>
+                <div style={{ fontSize:12,fontWeight:700,color:'#0f1729',marginBottom:12 }}>{cliCompSel||'—'}</div>
+                <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                  <thead><tr><th style={{ ...st.th,textAlign:'left' }}>Produto</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>Var.</th></tr></thead>
+                  <tbody>
+                    {produtosDoCliente.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={4}>Clique num cliente.</td></tr>}
+                    {produtosDoCliente.map((p,i)=>(
+                      <tr key={i}>
+                        <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.produto}</td>
+                        <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td><td style={st.td}>{varCell(p.varV)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>

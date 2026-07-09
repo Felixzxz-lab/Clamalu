@@ -131,7 +131,7 @@ export default function Produto({ user }) {
           <div><div style={{ color:'white',fontSize:16,fontWeight:700 }}>Clamalu</div><div style={{ color:'rgba(255,255,255,0.5)',fontSize:11 }}>Representações · Insumos</div></div>
         </div>
         <div style={{ display:'flex',gap:4 }}>
-          {['vendedor','produto','cliente','comparacao'].filter(p=>user?.paginas?.includes(p)).map(p=>(
+          {['vendedor','produto','cliente','comparacao','financeiro'].filter(p=>user?.paginas?.includes(p)).map(p=>(
             <button key={p} onClick={()=>router.push('/dashboard/'+p)} style={{ padding:'7px 18px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,textTransform:'uppercase',background:p==='produto'?'white':'rgba(255,255,255,0.1)',color:p==='produto'?'#0b2a8a':'rgba(255,255,255,0.75)' }}>
               {p==='comparacao'?'Comparação':p.charAt(0).toUpperCase()+p.slice(1)}
             </button>
