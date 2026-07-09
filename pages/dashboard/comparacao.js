@@ -146,7 +146,7 @@ export default function Comparacao({ user }) {
         </div>
         <div>
           <span style={st.label}>Vendedor</span>
-          <MultiSelect options={VEND_OPC} value={fVend} onChange={setFVend} minWidth={130} />
+          <MultiSelect options={user?.vendedores?.length ? user.vendedores : VEND_OPC} value={fVend} onChange={setFVend} minWidth={130} />
         </div>
         <div style={{ display:'flex',alignItems:'flex-end',gap:8,marginLeft:'auto' }}>
           <button onClick={()=>{setAnos([2025,2026]);setMesesSel([]);setFVend([])}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>

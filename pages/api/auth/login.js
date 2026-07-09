@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   if (!senhaOk) return res.status(401).json({ error: 'Senha incorreta' })
 
   const token = jwt.sign(
-    { id: user.id, nome: user.nome, email: user.email, role: user.role, paginas: user.paginas },
+    { id: user.id, nome: user.nome, email: user.email, role: user.role, paginas: user.paginas, vendedores: user.vendedores || [] },
     process.env.JWT_SECRET,
     { expiresIn: '8h' }
   )

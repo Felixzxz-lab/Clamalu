@@ -4,13 +4,14 @@ import { useRouter } from 'next/router'
 
 const PAGINAS = ['vendedor','produto','cliente','comparacao','financeiro']
 const PAGINAS_PADRAO = ['vendedor','produto','cliente','comparacao'] // novos usuários (financeiro é concedido à parte)
+const RESPONSAVEIS = ['THIAGO','WENDEL','CLEBER','CLAMALU'] // responsáveis/vendedores selecionáveis (vazio = todos)
 
 export default function Admin({ user }) {
   const router = useRouter()
   const [usuarios, setUsuarios] = useState([])
   const [uploads, setUploads] = useState([])
   const [aba, setAba] = useState('usuarios')
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'] })
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'], vendedores:[] })
   const [editId, setEditId] = useState(null)
   const [msg, setMsg] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -50,7 +51,7 @@ export default function Admin({ user }) {
     const d = await r.json()
     if (!r.ok) { setMsg('Erro: ' + d.error); return }
     setMsg(editId ? 'Usuário atualizado!' : 'Usuário criado!')
-    setForm({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'] })
+    setForm({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'], vendedores:[] })
     setEditId(null)
     carregarUsuarios()
   }
@@ -63,7 +64,7 @@ export default function Admin({ user }) {
 
   function editarUsuario(u) {
     setEditId(u.id)
-    setForm({ nome: u.nome, email: u.email, senha:'', role: u.role, paginas: u.paginas })
+    setForm({ nome: u.nome, email: u.email, senha:'', role: u.role, paginas: u.paginas, vendedores: u.vendedores || [] })
     setAba('usuarios')
     window.scrollTo(0,0)
   }
@@ -200,6 +201,9 @@ export default function Admin({ user }) {
   const togglePagina = (p) => {
     setForm(f => ({ ...f, paginas: f.paginas.includes(p) ? f.paginas.filter(x=>x!==p) : [...f.paginas, p] }))
   }
+  const toggleVendedor = (v) => {
+    setForm(f => ({ ...f, vendedores: (f.vendedores||[]).includes(v) ? f.vendedores.filter(x=>x!==v) : [...(f.vendedores||[]), v] }))
+  }
 
   const st = {
     page: { minHeight:'100vh', background:'#f4f6fb', fontFamily:"'Segoe UI',system-ui,sans-serif", fontSize:13 },
@@ -274,10 +278,22 @@ export default function Admin({ user }) {
                       </label>
                     ))}
                   </div>
+                  <label style={st.label}>Responsáveis que este usuário pode ver nos filtros <span style={{textTransform:'none',fontWeight:500,color:'#9aa6bf'}}>(nenhum marcado = vê todos)</span></label>
+                  <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap'}}>
+                    {RESPONSAVEIS.map(v => {
+                      const on = (form.vendedores||[]).includes(v)
+                      return (
+                      <label key={v} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:600,cursor:'pointer',padding:'6px 14px',borderRadius:8,border:`1.5px solid ${on?'#16a34a':'#e2e6f0'}`,background:on?'#dcfce7':'white',color:on?'#15803d':'#6b7a99'}}>
+                        <input type="checkbox" checked={on} onChange={()=>toggleVendedor(v)} style={{display:'none'}} />
+                        {v}
+                      </label>
+                      )
+                    })}
+                  </div>
                   {msg && <p style={{color: msg.includes('Erro')?'#dc2626':'#16a34a',fontSize:12,marginBottom:10}}>{msg}</p>}
                   <div style={{display:'flex',gap:8}}>
                     <button type="submit" style={st.btn}>{editId ? 'Salvar alterações' : 'Criar usuário'}</button>
-                    {editId && <button type="button" onClick={()=>{setEditId(null);setForm({nome:'',email:'',senha:'',role:'cliente',paginas:PAGINAS_PADRAO})}} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>}
+                    {editId && <button type="button" onClick={()=>{setEditId(null);setForm({nome:'',email:'',senha:'',role:'cliente',paginas:PAGINAS_PADRAO,vendedores:[]})}} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>}
                   </div>
                 </form>
               </div>
@@ -294,7 +310,7 @@ export default function Admin({ user }) {
                         <td style={st.td}><strong>{u.nome}</strong></td>
                         <td style={st.td}>{u.email}</td>
                         <td style={st.td}><span style={st.badge(u.role)}>{u.role === 'admin' ? '🔑 Admin' : '👤 Cliente'}</span></td>
-                        <td style={st.td}>{(u.paginas||[]).join(', ')}</td>
+                        <td style={st.td}>{(u.paginas||[]).join(', ')}{u.vendedores?.length ? <span style={{display:'block',fontSize:10,color:'#15803d',fontWeight:600}}>👤 só: {u.vendedores.join(', ')}</span> : <span style={{display:'block',fontSize:10,color:'#9aa6bf'}}>👤 todos os responsáveis</span>}</td>
                         <td style={st.td}><span style={{padding:'2px 8px',borderRadius:10,fontSize:10,fontWeight:700,background:u.ativo?'#dcfce7':'#fef2f2',color:u.ativo?'#15803d':'#dc2626'}}>{u.ativo?'Ativo':'Inativo'}</span></td>
                         <td style={st.td}>
                           <div style={{display:'flex',gap:6}}>

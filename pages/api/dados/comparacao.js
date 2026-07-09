@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../../../lib/supabase'
-import { requireAuth } from '../../../lib/auth'
+import { requireAuth, filtrarVendedores } from '../../../lib/auth'
 import { selectAll } from '../../../lib/db'
 
 export default requireAuth(async function handler(req, res) {
@@ -11,13 +11,14 @@ export default requireAuth(async function handler(req, res) {
   const anosArr = anos ? anos.split(',').map(Number) : [2025, 2026]
   const mesesArr = meses ? meses.split(',').map(Number) : null
   const vends = (vendedor || '').split(',').filter(Boolean)
+  const vendsF = filtrarVendedores(req.user, vends) // restrição por responsável
 
   let data
   try {
     data = await selectAll(() => {
       let q = db.from('vendas').select('ano,mes,vendedor,cliente,produto,uf,qtde,valor_total').in('ano', anosArr)
       if (mesesArr?.length) q = q.in('mes', mesesArr)
-      if (vends.length) q = q.in('vendedor', vends)
+      if (vendsF.length) q = q.in('vendedor', vendsF)
       return q
     })
   } catch (e) {
