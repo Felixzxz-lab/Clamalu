@@ -236,7 +236,7 @@ export default function Financeiro({ user }) {
               <div style={{ height: 240 }}><Bar data={evoData} options={evoOpts} /></div>
             </div>
             <div style={st.card}>
-              <div style={st.cardTitle}>Despesas por grupo <span style={{ fontWeight: 500, textTransform: 'none', color: '#9aa6bf' }}>· clique para realçar</span></div>
+              <div style={st.cardTitle}>Despesas por grupo <span style={{ fontWeight: 500, textTransform: 'none', color: '#9aa6bf' }}>· <span style={{ color: '#1341c4' }}>% das desp.</span> · <span style={{ color: '#9aa6bf' }}>% do faturamento</span></span></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ width: 180, height: 180 }}><Doughnut data={dough} options={doughOpts} /></div>
                 <div style={{ flex: 1, maxHeight: 200, overflowY: 'auto' }}>
@@ -244,7 +244,8 @@ export default function Financeiro({ user }) {
                     <div key={i} onClick={() => pick('grupo', g.grupo)} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7, cursor: 'pointer', opacity: contribui('grupo', g.grupo) ? 1 : 0.4 }}>
                       <div style={{ width: 10, height: 10, borderRadius: 2, background: corGrupo[g.grupo] }} />
                       <span style={{ fontSize: 11, fontWeight: isSel('grupo', g.grupo) ? 800 : 600, flex: 1 }}>{g.grupo}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1341c4' }}>{g.pct}%</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1341c4', minWidth: 34, textAlign: 'right' }}>{g.pct}%</span>
+                      <span style={{ fontSize: 10, color: '#9aa6bf', minWidth: 58, textAlign: 'right' }}>{g.pctFat == null ? '' : g.pctFat + '% fat.'}</span>
                     </div>
                   ))}
                 </div>
@@ -267,6 +268,7 @@ export default function Financeiro({ user }) {
                 <th style={{ ...st.th, textAlign: 'right' }}>% total</th>
                 <th style={{ ...st.th, textAlign: 'right' }}>Desp. operac.</th>
                 <th style={{ ...st.th, textAlign: 'right' }}>% operac.</th>
+                <th style={{ ...st.th, textAlign: 'right' }}>Resultado</th>
               </tr></thead>
               <tbody>
                 {(dados?.porMes || []).filter(m => m.faturamento > 0 || m.valor > 0).map((m, i) => (
@@ -277,6 +279,7 @@ export default function Financeiro({ user }) {
                     {cel(m.representatividade)}
                     <td style={{ ...st.td, textAlign: 'right' }}>{fmtReal(m.valorOper)}</td>
                     {cel(m.representatividadeOper)}
+                    <td style={{ ...st.td, textAlign: 'right', fontWeight: 700, color: m.faturamento <= 0 ? '#9ca3af' : (m.faturamento - m.valor) >= 0 ? '#16a34a' : '#dc2626' }}>{m.faturamento <= 0 ? '—' : fmtReal(m.faturamento - m.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -285,11 +288,12 @@ export default function Financeiro({ user }) {
                 <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, color: corPct(dados?.kpis?.representatividade), borderTop: '2px solid #e2e6f0' }}>{dados?.kpis?.representatividade == null ? '—' : dados.kpis.representatividade.toFixed(1) + '%'}</td>
                 <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, borderTop: '2px solid #e2e6f0' }}>{fmtReal(dados?.kpis?.valorOper)}</td>
                 <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, color: corPct(dados?.kpis?.representatividadeOper), borderTop: '2px solid #e2e6f0' }}>{dados?.kpis?.representatividadeOper == null ? '—' : dados.kpis.representatividadeOper.toFixed(1) + '%'}</td>
+                {(() => { const fat = dados?.kpis?.faturamento || 0, dsp = dados?.kpis?.valor || 0, res = fat - dsp; return <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, color: fat <= 0 ? '#9ca3af' : res >= 0 ? '#16a34a' : '#dc2626', borderTop: '2px solid #e2e6f0' }}>{fat <= 0 ? '—' : fmtReal(res)}</td> })()}
               </tr></tfoot>
             </table>
               )
             })()}
-            <div style={{ fontSize: 11, color: '#6b7a99', marginTop: 10 }}><b>% total</b> = todas as despesas ÷ faturamento. <b>% operac.</b> = sem "Revenda / Mercadoria" (custo da mercadoria), só as despesas de operação. Quanto menor, melhor: <span style={{ color: '#16a34a', fontWeight: 600 }}>verde</span> &lt; 70% · <span style={{ color: '#ea8c00', fontWeight: 600 }}>laranja</span> 70–100% · <span style={{ color: '#dc2626', fontWeight: 600 }}>vermelho</span> &gt; 100%. Meses sem faturamento lançado aparecem como "—".</div>
+            <div style={{ fontSize: 11, color: '#6b7a99', marginTop: 10 }}><b>% total</b> = todas as despesas ÷ faturamento. <b>% operac.</b> = sem "Revenda / Mercadoria" (custo da mercadoria), só as despesas de operação. Quanto menor, melhor: <span style={{ color: '#16a34a', fontWeight: 600 }}>verde</span> &lt; 70% · <span style={{ color: '#ea8c00', fontWeight: 600 }}>laranja</span> 70–100% · <span style={{ color: '#dc2626', fontWeight: 600 }}>vermelho</span> &gt; 100%. <b>Resultado</b> = faturamento − despesas do mês (<span style={{ color: '#16a34a', fontWeight: 600 }}>verde</span> = sobra · <span style={{ color: '#dc2626', fontWeight: 600 }}>vermelho</span> = déficit). Meses sem faturamento lançado aparecem como "—".</div>
           </div>
 
           {/* TOP FORNECEDORES (barras) */}

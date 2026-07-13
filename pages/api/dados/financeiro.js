@@ -57,6 +57,8 @@ export default requireAuth(async function handler(req, res) {
   const fatMap = {}
   vendas.forEach(r => { fatMap[r.mes] = (fatMap[r.mes] || 0) + Number(r.valor_total) })
   const totalFat = vendas.reduce((s, r) => s + Number(r.valor_total), 0)
+  // peso de cada grupo sobre o faturamento
+  porGrupo.forEach(g => { g.pctFat = totalFat > 0 ? Math.round(g.valor / totalFat * 1000) / 10 : null })
 
   const porMes = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1
