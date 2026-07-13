@@ -35,12 +35,40 @@ export default requireAuth(async function handler(req, res) {
     pct: totalValor > 0 ? Math.round(v / totalValor * 1000) / 10 : 0
   })).sort((a, b) => b.valor - a.valor)
 
-  // Evolução mensal (soma por mês, 1..12)
-  const mesMap = {}
-  data.forEach(r => { mesMap[r.mes] = (mesMap[r.mes] || 0) + Number(r.valor) })
-  const porMes = Array.from({ length: 12 }, (_, i) => ({
-    mes: i + 1, valor: Math.round((mesMap[i + 1] || 0) * 100) / 100
-  }))
+  // Evolução mensal (soma por mês, 1..12) — total e operacional (sem Revenda/Mercadoria)
+  const isRevenda = g => /revenda/i.test(g || '')
+  const mesMap = {}, mesMapOper = {}
+  data.forEach(r => {
+    mesMap[r.mes] = (mesMap[r.mes] || 0) + Number(r.valor)
+    if (!isRevenda(r.grupo)) mesMapOper[r.mes] = (mesMapOper[r.mes] || 0) + Number(r.valor)
+  })
+  const totalOper = data.reduce((s, r) => s + (isRevenda(r.grupo) ? 0 : Number(r.valor)), 0)
+
+  // Faturamento (vendas) por mês — cruza com as despesas para a representatividade
+  const anosFat = [...new Set(data.map(r => r.ano))]
+  let vendas = []
+  try {
+    if (anosFat.length) vendas = await selectAll(() => {
+      let q = db.from('vendas').select('valor_total,mes').in('ano', anosFat)
+      if (meses.length) q = q.in('mes', meses)
+      return q
+    })
+  } catch (e) { vendas = [] }
+  const fatMap = {}
+  vendas.forEach(r => { fatMap[r.mes] = (fatMap[r.mes] || 0) + Number(r.valor_total) })
+  const totalFat = vendas.reduce((s, r) => s + Number(r.valor_total), 0)
+
+  const porMes = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    const desp = Math.round((mesMap[m] || 0) * 100) / 100
+    const despOper = Math.round((mesMapOper[m] || 0) * 100) / 100
+    const fat = Math.round((fatMap[m] || 0) * 100) / 100
+    return {
+      mes: m, valor: desp, valorOper: despOper, faturamento: fat,
+      representatividade: fat > 0 ? Math.round(desp / fat * 10000) / 100 : null,
+      representatividadeOper: fat > 0 ? Math.round(despOper / fat * 10000) / 100 : null
+    }
+  })
 
   // Top fornecedores
   const fMap = {}
@@ -71,6 +99,10 @@ export default requireAuth(async function handler(req, res) {
       mediaMes: Math.round(totalValor / mesesDistintos * 100) / 100,
       fornecedores,
       maiorGrupo: porGrupo[0]?.grupo || '—',
+      faturamento: Math.round(totalFat * 100) / 100,
+      valorOper: Math.round(totalOper * 100) / 100,
+      representatividade: totalFat > 0 ? Math.round(totalValor / totalFat * 10000) / 100 : null,
+      representatividadeOper: totalFat > 0 ? Math.round(totalOper / totalFat * 10000) / 100 : null,
     },
     porGrupo, porMes, topFornecedores, linhas, opcoes
   })

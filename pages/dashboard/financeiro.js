@@ -89,7 +89,7 @@ export default function Financeiro({ user }) {
   const st = {
     filtros: { background: 'white', borderBottom: '1px solid #e2e6f0', padding: '10px 28px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
     label: { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: '#6b7a99' },
-    kpiBar: { background: 'linear-gradient(135deg,#0b2a8a 0%,#1341c4 100%)', padding: '20px 28px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)' },
+    kpiBar: { background: 'linear-gradient(135deg,#0b2a8a 0%,#1341c4 100%)', padding: '20px 28px', display: 'grid', gridTemplateColumns: 'repeat(5,1fr)' },
     kpi: { textAlign: 'center', padding: '8px 16px', borderRight: '1px solid rgba(255,255,255,0.12)' },
     kpiVal: { fontSize: 32, fontWeight: 800, color: 'white', letterSpacing: -1, lineHeight: 1.1 },
     kpiLbl: { fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 5 },
@@ -223,6 +223,7 @@ export default function Financeiro({ user }) {
         <div style={st.kpi}><div style={st.kpiVal}>{loading ? '...' : fmtVal(dados?.kpis?.valor)}</div><div style={st.kpiLbl}>Despesa Total</div></div>
         <div style={st.kpi}><div style={st.kpiVal}>{loading ? '...' : fmtVal(dados?.kpis?.mediaMes)}</div><div style={st.kpiLbl}>Média / Mês</div></div>
         <div style={st.kpi}><div style={st.kpiVal}>{loading ? '...' : fmtN(dados?.kpis?.fornecedores)}</div><div style={st.kpiLbl}>Fornecedores</div></div>
+        <div style={st.kpi}><div style={st.kpiVal}>{loading ? '...' : (dados?.kpis?.representatividade == null ? '—' : dados.kpis.representatividade.toFixed(1) + '%')}</div><div style={st.kpiLbl}>Despesas / Faturamento</div></div>
         <div style={{ ...st.kpi, borderRight: 'none' }}><div style={{ ...st.kpiVal, fontSize: 18, paddingTop: 6 }}>{loading ? '...' : dados?.kpis?.maiorGrupo}</div><div style={st.kpiLbl}>Maior Grupo</div></div>
       </div>
 
@@ -249,6 +250,46 @@ export default function Financeiro({ user }) {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* REPRESENTATIVIDADE: DESPESAS x FATURAMENTO */}
+          <div style={st.card}>
+            <div style={st.cardTitle}>Representatividade das despesas sobre o faturamento <span style={{ fontWeight: 500, textTransform: 'none', color: '#9aa6bf' }}>· despesas ÷ vendas, mês a mês</span></div>
+            {(() => {
+              const corPct = p => p == null ? '#9ca3af' : p >= 100 ? '#dc2626' : p >= 70 ? '#ea8c00' : '#16a34a'
+              const cel = p => <td style={{ ...st.td, textAlign: 'right', fontWeight: 700, color: corPct(p) }}>{p == null ? '—' : p.toFixed(1) + '%'}</td>
+              return (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={st.th}>Mês</th>
+                <th style={{ ...st.th, textAlign: 'right' }}>Faturamento</th>
+                <th style={{ ...st.th, textAlign: 'right' }}>Desp. total</th>
+                <th style={{ ...st.th, textAlign: 'right' }}>% total</th>
+                <th style={{ ...st.th, textAlign: 'right' }}>Desp. operac.</th>
+                <th style={{ ...st.th, textAlign: 'right' }}>% operac.</th>
+              </tr></thead>
+              <tbody>
+                {(dados?.porMes || []).filter(m => m.faturamento > 0 || m.valor > 0).map((m, i) => (
+                  <tr key={i}>
+                    <td style={{ ...st.td, fontWeight: 600 }}>{MES_ABREV[m.mes - 1]}</td>
+                    <td style={{ ...st.td, textAlign: 'right' }}>{fmtReal(m.faturamento)}</td>
+                    <td style={{ ...st.td, textAlign: 'right' }}>{fmtReal(m.valor)}</td>
+                    {cel(m.representatividade)}
+                    <td style={{ ...st.td, textAlign: 'right' }}>{fmtReal(m.valorOper)}</td>
+                    {cel(m.representatividadeOper)}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr>
+                {[['Total', 'left'], [fmtReal(dados?.kpis?.faturamento), 'right'], [fmtReal(dados?.kpis?.valor), 'right']].map(([v, a], k) => <td key={k} style={{ ...st.td, textAlign: a, fontWeight: 800, borderTop: '2px solid #e2e6f0' }}>{v}</td>)}
+                <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, color: corPct(dados?.kpis?.representatividade), borderTop: '2px solid #e2e6f0' }}>{dados?.kpis?.representatividade == null ? '—' : dados.kpis.representatividade.toFixed(1) + '%'}</td>
+                <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, borderTop: '2px solid #e2e6f0' }}>{fmtReal(dados?.kpis?.valorOper)}</td>
+                <td style={{ ...st.td, textAlign: 'right', fontWeight: 800, color: corPct(dados?.kpis?.representatividadeOper), borderTop: '2px solid #e2e6f0' }}>{dados?.kpis?.representatividadeOper == null ? '—' : dados.kpis.representatividadeOper.toFixed(1) + '%'}</td>
+              </tr></tfoot>
+            </table>
+              )
+            })()}
+            <div style={{ fontSize: 11, color: '#6b7a99', marginTop: 10 }}><b>% total</b> = todas as despesas ÷ faturamento. <b>% operac.</b> = sem "Revenda / Mercadoria" (custo da mercadoria), só as despesas de operação. Quanto menor, melhor: <span style={{ color: '#16a34a', fontWeight: 600 }}>verde</span> &lt; 70% · <span style={{ color: '#ea8c00', fontWeight: 600 }}>laranja</span> 70–100% · <span style={{ color: '#dc2626', fontWeight: 600 }}>vermelho</span> &gt; 100%. Meses sem faturamento lançado aparecem como "—".</div>
           </div>
 
           {/* TOP FORNECEDORES (barras) */}
