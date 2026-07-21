@@ -98,8 +98,8 @@ export default function Comparacao({ user }) {
   const produtosDoCliente = (() => {
     if(!cliCompSel) return []
     const m={}
-    for(const r of linhasC){ if(r.cliente!==cliCompSel) continue; const o=m[r.produto]=m[r.produto]||{v0:0,v1:0}; if(r.ano===aBase)o.v0+=r.valor_total; else if(r.ano===aComp)o.v1+=r.valor_total }
-    return Object.entries(m).map(([k,d])=>({ produto:k, v0:d.v0, v1:d.v1, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null })).sort((a,b)=>b.v0-a.v0).slice(0,12)
+    for(const r of linhasC){ if(r.cliente!==cliCompSel) continue; const o=m[r.produto]=m[r.produto]||{v0:0,v1:0,q0:0,q1:0}; if(r.ano===aBase){o.v0+=r.valor_total;o.q0+=r.qtde} else if(r.ano===aComp){o.v1+=r.valor_total;o.q1+=r.qtde} }
+    return Object.entries(m).map(([k,d])=>({ produto:k, v0:d.v0, v1:d.v1, q0:d.q0, q1:d.q1, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null })).sort((a,b)=>b.v0-a.v0).slice(0,12)
   })()
 
   return (
@@ -279,7 +279,7 @@ export default function Comparacao({ user }) {
 
           {/* COMPARATIVO POR CLIENTE + DRILL */}
           {doComp && (
-            <div style={{ display:'grid',gridTemplateColumns:'1.3fr 1fr',gap:16,alignItems:'start' }}>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1.15fr',gap:16,alignItems:'start' }}>
               <div style={st.card}>
                 <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Comparativo por cliente — {aBase} vs {aComp} <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· {perLabel}</span></div>
                 <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:12 }}>Clique num cliente para ver onde o consumo dele caiu →</div>
@@ -301,12 +301,19 @@ export default function Comparacao({ user }) {
                 <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Onde o consumo caiu</div>
                 <div style={{ fontSize:12,fontWeight:700,color:'#0f1729',marginBottom:12 }}>{cliCompSel||'—'}</div>
                 <table style={{ width:'100%',borderCollapse:'collapse' }}>
-                  <thead><tr><th style={{ ...st.th,textAlign:'left' }}>Produto</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>Var.</th></tr></thead>
+                  <thead><tr>
+                    <th style={{ ...st.th,textAlign:'left' }}>Produto</th>
+                    <th style={st.th}>Qtd {aBase}</th><th style={st.th}>Qtd {aComp}</th>
+                    <th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th>
+                    <th style={st.th}>Var.</th>
+                  </tr></thead>
                   <tbody>
-                    {produtosDoCliente.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={4}>Clique num cliente.</td></tr>}
+                    {produtosDoCliente.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={6}>Clique num cliente.</td></tr>}
                     {produtosDoCliente.map((p,i)=>(
                       <tr key={i}>
                         <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.produto}</td>
+                        <td style={st.td}>{fmtN(p.q0)}</td>
+                        <td style={{ ...st.td, fontWeight: p.q1!==p.q0?700:400, color: p.q1<p.q0?'#dc2626':p.q1>p.q0?'#16a34a':'#0f1729' }}>{fmtN(p.q1)}</td>
                         <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td><td style={st.td}>{varCell(p.varV)}</td>
                       </tr>
                     ))}
