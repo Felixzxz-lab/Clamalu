@@ -102,6 +102,20 @@ export default function Comparacao({ user }) {
     return Object.entries(m).map(([k,d])=>({ produto:k, v0:d.v0, v1:d.v1, q0:d.q0, q1:d.q1, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null })).sort((a,b)=>b.v0-a.v0).slice(0,12)
   })()
 
+  // Radar: pares cliente x produto que existiam no ano base e ZERARAM no ano comparado
+  const zerados = doComp ? (() => {
+    const m={}
+    for(const r of linhasC){
+      const k=r.cliente+'||'+r.produto
+      const o=m[k]=m[k]||{ cliente:r.cliente, produto:r.produto, uf:r.uf, v0:0, v1:0, q0:0 }
+      if(r.ano===aBase){ o.v0+=r.valor_total; o.q0+=r.qtde } else if(r.ano===aComp){ o.v1+=r.valor_total }
+    }
+    return Object.values(m).filter(o=>o.v0>0 && o.v1===0).sort((a,b)=>b.v0-a.v0)
+  })() : []
+  const zeradosTop = zerados.slice(0,25)
+  const zeradosTotal = zerados.reduce((s,z)=>s+z.v0,0)
+  const zeradosClientes = new Set(zerados.map(z=>z.cliente)).size
+
   return (
     <div style={{ minHeight:'100vh',background:'#f4f6fb',fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:13 }}>
       <Head><title>Clamalu · Comparação</title></Head>
@@ -320,6 +334,46 @@ export default function Comparacao({ user }) {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* RADAR: CLIENTES QUE PARARAM DE COMPRAR PRODUTOS */}
+          {doComp && (
+            <div style={st.card}>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>🚨 Produtos que o cliente parou de comprar — {aBase} → {aComp} <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· {perLabel}</span></div>
+              <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:10 }}>
+                Comprou em <b>{aBase}</b> e não comprou <b>nada</b> em {aComp}. Ordenado pelo valor perdido.
+                <span style={{ color:'#b45309' }}> ⚠️ Compare períodos equivalentes — selecione nos filtros acima só os meses que já existem nos dois anos, senão meses ainda não lançados aparecem como "parou de comprar".</span>
+              </div>
+              {zerados.length===0 ? (
+                <div style={{ padding:16,textAlign:'center',color:'#16a34a',fontSize:12,fontWeight:600 }}>✅ Nenhum produto foi zerado no período — nenhum cliente parou de comprar.</div>
+              ) : (<>
+                <div style={{ display:'flex',gap:24,marginBottom:12,flexWrap:'wrap' }}>
+                  <div><div style={{ fontSize:10,color:'#6b7a99',fontWeight:700,textTransform:'uppercase' }}>Valor perdido</div><div style={{ fontSize:20,fontWeight:800,color:'#dc2626' }}>{fmtVal(zeradosTotal)}</div></div>
+                  <div><div style={{ fontSize:10,color:'#6b7a99',fontWeight:700,textTransform:'uppercase' }}>Clientes afetados</div><div style={{ fontSize:20,fontWeight:800,color:'#0f1729' }}>{zeradosClientes}</div></div>
+                  <div><div style={{ fontSize:10,color:'#6b7a99',fontWeight:700,textTransform:'uppercase' }}>Itens zerados</div><div style={{ fontSize:20,fontWeight:800,color:'#0f1729' }}>{zerados.length}</div></div>
+                </div>
+                <div style={{ maxHeight:340,overflowY:'auto' }}>
+                  <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                    <thead><tr>
+                      <th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Cliente</th><th style={st.th}>UF</th>
+                      <th style={{ ...st.th,textAlign:'left' }}>Produto</th>
+                      <th style={st.th}>Qtd {aBase}</th><th style={st.th}>Valor perdido</th>
+                    </tr></thead>
+                    <tbody>{zeradosTop.map((z,i)=>(
+                      <tr key={i} onClick={()=>setCliComp(z.cliente)} style={{ cursor:'pointer' }}>
+                        <td style={{ ...st.td,textAlign:'left' }}>{i+1}</td>
+                        <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{z.cliente}</td>
+                        <td style={st.td}><span style={{ padding:'2px 8px',borderRadius:5,fontSize:10,fontWeight:700,background:'#e8eeff',color:'#1341c4' }}>{z.uf}</span></td>
+                        <td style={{ ...st.td,textAlign:'left',fontSize:11 }}>{z.produto}</td>
+                        <td style={st.td}>{fmtN(z.q0)}</td>
+                        <td style={{ ...st.td,fontWeight:700,color:'#dc2626' }}>{fmtVal(z.v0)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+                {zerados.length>25 && <div style={{ fontSize:11,color:'#9aa6bf',marginTop:8 }}>Mostrando os 25 maiores de {zerados.length}. Clique numa linha para ver o cliente no comparativo acima.</div>}
+              </>)}
             </div>
           )}
         </div>
