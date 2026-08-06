@@ -60,6 +60,10 @@ export default requireAuth(async function handler(req, res) {
   // peso de cada grupo sobre o faturamento
   porGrupo.forEach(g => { g.pctFat = totalFat > 0 ? Math.round(g.valor / totalFat * 1000) / 10 : null })
 
+  // 12 posições (jan..dez) agregando os anos que passaram pelo filtro. Despesa e
+  // faturamento usam o mesmo conjunto de anos (`anosFat`), então a representatividade
+  // fecha; mas com 2+ anos selecionados uma barra soma os dois. O dashboard entra
+  // filtrado no ano mais recente justamente para não cair nesse caso sem avisar.
   const porMes = Array.from({ length: 12 }, (_, i) => {
     const m = i + 1
     const desp = Math.round((mesMap[m] || 0) * 100) / 100

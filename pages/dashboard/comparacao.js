@@ -6,7 +6,7 @@ import { verifyToken } from '../../lib/auth'
 import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 import { RealceBanner } from '../../components/realce'
-import { MultiSelect, VEND_OPC } from '../../components/MultiSelect'
+import { MultiSelect, useOpcoes } from '../../components/MultiSelect'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
 const CORES_ANO = { 2024:'#93aafc', 2025:'#1341c4', 2026:'#16a34a' }
@@ -25,6 +25,7 @@ export default function Comparacao({ user }) {
   const [fVend, setFVend] = useState([])
   const [sel, setSel] = useState(null) // realce de série: { dim:'ano'|'vendedor', value }
   const [cliComp, setCliComp] = useState(null) // cliente selecionado no comparativo por cliente
+  const opcoes = useOpcoes()
 
   useEffect(() => { carregar() }, [anos, mesesSel, fVend])
 
@@ -160,7 +161,7 @@ export default function Comparacao({ user }) {
         </div>
         <div>
           <span style={st.label}>Vendedor</span>
-          <MultiSelect options={user?.vendedores?.length ? user.vendedores : VEND_OPC} value={fVend} onChange={setFVend} minWidth={130} />
+          <MultiSelect options={user?.vendedores?.length ? user.vendedores : opcoes.vendedores} value={fVend} onChange={setFVend} minWidth={130} />
         </div>
         <div style={{ display:'flex',alignItems:'flex-end',gap:8,marginLeft:'auto' }}>
           <button onClick={()=>{setAnos([2025,2026]);setMesesSel([]);setFVend([])}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>

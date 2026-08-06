@@ -5,7 +5,7 @@ import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
-import { MultiSelect, ANOS_OPC, MESES_OPC, VEND_OPC } from '../../components/MultiSelect'
+import { MultiSelect, MESES_OPC, useOpcoes } from '../../components/MultiSelect'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 const CORES = { THIAGO: '#1341c4', WENDEL: '#16a34a', CLEBER: '#dc2626', CLAMALU: '#ea8c00' }
@@ -24,6 +24,7 @@ export default function Vendedor({ user }) {
   const [fMes, setFMes] = useState([])
   const [fVend, setFVend] = useState([])
   const [sel, setSel] = useState(null) // realce: { dim, value }
+  const opcoes = useOpcoes()
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
 
@@ -203,7 +204,7 @@ export default function Vendedor({ user }) {
       <div style={st.filtros}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Ano</span>
-          <MultiSelect options={ANOS_OPC} value={fAno} onChange={setFAno} accent="#a3b4f5" minWidth={110} />
+          <MultiSelect options={opcoes.anos} value={fAno} onChange={setFAno} accent="#a3b4f5" minWidth={110} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Mês</span>
@@ -211,7 +212,7 @@ export default function Vendedor({ user }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Vendedor</span>
-          <MultiSelect options={user?.vendedores?.length ? user.vendedores : VEND_OPC} value={fVend} onChange={setFVend} accent="#f5d6a3" minWidth={120} />
+          <MultiSelect options={user?.vendedores?.length ? user.vendedores : opcoes.vendedores} value={fVend} onChange={setFVend} accent="#f5d6a3" minWidth={120} />
         </div>
         <button style={st.btnLimpar} onClick={() => { setFAno([]); setFMes([]); setFVend([]) }}>✕ Limpar</button>
         <button style={st.btnExport} onClick={exportar}>⬇ Exportar Excel</button>

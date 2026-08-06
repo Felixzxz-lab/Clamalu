@@ -1,9 +1,32 @@
 import { useState, useRef, useEffect } from 'react'
 
+// Fallback usado só enquanto /api/dados/opcoes não respondeu (ou se ela falhar).
+// A lista real vem do banco — ver useOpcoes() abaixo.
 export const ANOS_OPC = ['2024', '2025', '2026']
-export const VEND_OPC = ['THIAGO', 'WENDEL', 'CLEBER', 'CLAMALU']
+export const VEND_OPC = ['CLAMALU', 'CLEBER', 'MAICON', 'THIAGO', 'WENDEL', 'YGOR']
 export const MESES_OPC = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
   .map((m, i) => ({ value: String(i + 1), label: m }))
+
+// Lê vendedores/anos existentes na tabela `vendas`. Assim um vendedor novo
+// aparece no filtro sozinho, sem precisar editar constante no código.
+export function useOpcoes() {
+  const [opcoes, setOpcoes] = useState({ vendedores: VEND_OPC, anos: ANOS_OPC })
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/dados/opcoes')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!vivo || !d) return
+        setOpcoes({
+          vendedores: d.vendedores?.length ? d.vendedores : VEND_OPC,
+          anos: d.anos?.length ? d.anos : ANOS_OPC,
+        })
+      })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [])
+  return opcoes
+}
 
 // Lista suspensa com caixas de seleção (multi-seleção). value é um array de strings.
 export function MultiSelect({ label, options, value, onChange, accent = '#e2e6f0', minWidth = 130 }) {

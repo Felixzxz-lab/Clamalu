@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 
 const PAGINAS = ['vendedor','produto','cliente','comparacao','financeiro']
 const PAGINAS_PADRAO = ['vendedor','produto','cliente','comparacao'] // novos usuários (financeiro é concedido à parte)
-const RESPONSAVEIS = ['THIAGO','WENDEL','CLEBER','CLAMALU'] // responsáveis/vendedores selecionáveis (vazio = todos)
+const RESPONSAVEIS_FALLBACK = ['CLAMALU','CLEBER','MAICON','THIAGO','WENDEL','YGOR'] // só usado se /api/dados/opcoes falhar
 
 export default function Admin({ user }) {
   const router = useRouter()
@@ -30,7 +30,17 @@ export default function Admin({ user }) {
   const [uploadingD, setUploadingD] = useState(false)
   const [uploadMsgD, setUploadMsgD] = useState('')
 
-  useEffect(() => { carregarUsuarios(); carregarUploads() }, [])
+  const [responsaveis, setResponsaveis] = useState(RESPONSAVEIS_FALLBACK)
+
+  useEffect(() => { carregarUsuarios(); carregarUploads(); carregarResponsaveis() }, [])
+
+  // lista de responsáveis vem da tabela `vendas` — vendedor novo aparece sozinho
+  async function carregarResponsaveis() {
+    const r = await fetch('/api/dados/opcoes')
+    if (!r.ok) return
+    const d = await r.json()
+    if (d.vendedores?.length) setResponsaveis(d.vendedores)
+  }
 
   async function carregarUsuarios() {
     const r = await fetch('/api/admin/usuarios')
@@ -280,7 +290,7 @@ export default function Admin({ user }) {
                   </div>
                   <label style={st.label}>Responsáveis que este usuário pode ver nos filtros <span style={{textTransform:'none',fontWeight:500,color:'#9aa6bf'}}>(nenhum marcado = vê todos)</span></label>
                   <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap'}}>
-                    {RESPONSAVEIS.map(v => {
+                    {responsaveis.map(v => {
                       const on = (form.vendedores||[]).includes(v)
                       return (
                       <label key={v} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:600,cursor:'pointer',padding:'6px 14px',borderRadius:8,border:`1.5px solid ${on?'#16a34a':'#e2e6f0'}`,background:on?'#dcfce7':'white',color:on?'#15803d':'#6b7a99'}}>

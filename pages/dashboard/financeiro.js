@@ -45,6 +45,12 @@ export default function Financeiro({ user }) {
     // popula as opções dos filtros a partir do retorno (só quando não filtrado, pra não "sumir" opção)
     if (!fAno.length && d?.opcoes?.anos) setOpAno(d.opcoes.anos.map(String))
     if (!fGrupo.length && d?.opcoes?.grupos) setOpGrupo(d.opcoes.grupos)
+    // A evolução mensal tem 12 barras (jan..dez). Com mais de um ano em aberto,
+    // "Janeiro" somaria anos diferentes na mesma barra. Então, quando a base
+    // passa a ter vários anos, já entra filtrado no mais recente.
+    if (!fAno.length && d?.opcoes?.anos?.length > 1) {
+      setFAno([String(Math.max(...d.opcoes.anos.map(Number)))])
+    }
     setLoading(false)
   }
 
