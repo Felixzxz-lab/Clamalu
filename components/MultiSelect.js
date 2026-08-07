@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 // Fallback usado só enquanto /api/dados/opcoes não respondeu (ou se ela falhar).
 // A lista real vem do banco — ver useOpcoes() abaixo.
 export const ANOS_OPC = ['2024', '2025', '2026']
-export const VEND_OPC = ['CLAMALU', 'CLEBER', 'MAICON', 'THIAGO', 'WENDEL', 'YGOR']
+export const VEND_OPC = ['CLAMALU', 'CLEBER', 'THIAGO', 'WENDEL', 'YGOR']
 export const MESES_OPC = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
   .map((m, i) => ({ value: String(i + 1), label: m }))
 

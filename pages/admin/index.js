@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 
 const PAGINAS = ['vendedor','produto','cliente','comparacao','financeiro']
 const PAGINAS_PADRAO = ['vendedor','produto','cliente','comparacao'] // novos usuários (financeiro é concedido à parte)
-const RESPONSAVEIS_FALLBACK = ['CLAMALU','CLEBER','MAICON','THIAGO','WENDEL','YGOR'] // só usado se /api/dados/opcoes falhar
+const RESPONSAVEIS_FALLBACK = ['CLAMALU','CLEBER','THIAGO','WENDEL','YGOR'] // só usado se /api/dados/opcoes falhar
 
 export default function Admin({ user }) {
   const router = useRouter()

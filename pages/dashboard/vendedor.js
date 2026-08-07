@@ -6,9 +6,9 @@ import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
 import { MultiSelect, MESES_OPC, useOpcoes } from '../../components/MultiSelect'
+import { corVendedor } from '../../lib/cores'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-const CORES = { THIAGO: '#1341c4', WENDEL: '#16a34a', CLEBER: '#dc2626', CLAMALU: '#ea8c00' }
 const AZUIS = ['#1341c4','#2a5ae0','#4a78f5','#7399f8','#93aafc']
 
 function fmtVal(v) { if (!v) return '—'; if (v >= 1e6) return 'R$ ' + (v/1e6).toFixed(2).replace('.',',') + ' Mi'; if (v >= 1e3) return 'R$ ' + (v/1e3).toFixed(0) + ' Mil'; return 'R$ ' + Math.round(v) }
@@ -49,6 +49,8 @@ export default function Vendedor({ user }) {
   }
 
   const linhas = dados?.linhas || []
+  // cor por vendedor sai dos dados, para vendedor novo nao cair no cinza
+  const todosVends = (dados?.porVendedor || []).map(v => v.vendedor)
   // soma de uma medida por categoria, restrita ao item realçado (se houver)
   function aggBy(catKey, measure, comSel) {
     const m = {}
@@ -148,7 +150,7 @@ export default function Vendedor({ user }) {
     datasets: [{
       data: dados?.porVendedor?.map(v => v.clientes) || [],
       backgroundColor: dados?.porVendedor?.map(v => {
-        const c = CORES[v.vendedor] || '#888888'
+        const c = corVendedor(v.vendedor, todosVends)
         return contribui('vendedor', v.vendedor) ? c : fade(c)
       }) || [], borderWidth: 3, borderColor: '#fff'
     }]
@@ -244,7 +246,7 @@ export default function Vendedor({ user }) {
                 const hiMap = aggBy('vendedor', 'valor', true)
                 return dados?.porVendedor?.map((v, i) => (
                   <Barra key={i} nome={v.vendedor} total={v.valor} hi={hiMap[v.vendedor] || 0} max={max}
-                    cor={CORES[v.vendedor] || '#1341c4'} direita={`${fmtVal(v.valor)} · ${v.pct}%`}
+                    cor={corVendedor(v.vendedor, todosVends)} direita={`${fmtVal(v.valor)} · ${v.pct}%`}
                     onClick={() => pick('vendedor', v.vendedor)} />
                 ))
               })()}
@@ -256,7 +258,7 @@ export default function Vendedor({ user }) {
                 const hiMap = aggBy('vendedor', 'qtde', true)
                 return dados?.porVendedor?.map((v, i) => (
                   <Barra key={i} nome={v.vendedor} total={v.qtde} hi={hiMap[v.vendedor] || 0} max={max}
-                    cor={CORES[v.vendedor] || '#1341c4'} direita={`${fmtN(v.qtde)} un.`}
+                    cor={corVendedor(v.vendedor, todosVends)} direita={`${fmtN(v.qtde)} un.`}
                     onClick={() => pick('vendedor', v.vendedor)} />
                 ))
               })()}
@@ -280,7 +282,7 @@ export default function Vendedor({ user }) {
                 <div style={{ flex: 1 }}>
                   {dados?.porVendedor?.map((v,i) => (
                     <div key={i} onClick={() => pick('vendedor', v.vendedor)} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer', opacity: contribui('vendedor', v.vendedor) ? 1 : 0.4 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: 2, background: CORES[v.vendedor]||'#888' }} />
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: corVendedor(v.vendedor, todosVends) }} />
                       <span style={{ fontSize: 12, fontWeight: isSel('vendedor', v.vendedor) ? 800 : 600, flex: 1 }}>{v.vendedor}</span>
                       <span style={{ fontSize: 11, color: '#6b7a99' }}>{v.clientes} cli.</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#1341c4' }}>{v.pct}%</span>

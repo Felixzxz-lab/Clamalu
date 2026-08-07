@@ -8,11 +8,6 @@ import { selectAll } from '../../../lib/db'
 let cache = null
 const TTL = 5 * 60 * 1000
 
-// Vendedores já contratados que ainda não têm nota lançada — sem isto eles não
-// existiriam no filtro nem no painel Admin, porque a lista vem da tabela `vendas`.
-// Assim que a primeira venda entrar, passam a vir do banco e podem sair daqui.
-const VENDEDORES_SEM_VENDA = ['MAICON']
-
 export default requireAuth(async function handler(req, res) {
   if (cache && Date.now() - cache.em < TTL) return res.status(200).json(cache.dados)
 
@@ -25,10 +20,10 @@ export default requireAuth(async function handler(req, res) {
   }
 
   const dados = {
-    vendedores: [...new Set([
-      ...linhas.map(r => r.vendedor).filter(Boolean),
-      ...VENDEDORES_SEM_VENDA,
-    ])].sort(),
+    // Só entra quem tem venda lançada. Vendedor contratado mas sem nota ainda
+    // não aparece em filtro nenhum — aparece sozinho na primeira importação
+    // que trouxer uma linha dele.
+    vendedores: [...new Set(linhas.map(r => r.vendedor).filter(Boolean))].sort(),
     anos: [...new Set(linhas.map(r => r.ano).filter(Boolean))].sort((a, b) => a - b).map(String),
   }
 

@@ -7,11 +7,11 @@ import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
 import { RealceBanner } from '../../components/realce'
 import { MultiSelect, useOpcoes } from '../../components/MultiSelect'
+import { corVendedor, corAno } from '../../lib/cores'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
-const CORES_ANO = { 2024:'#93aafc', 2025:'#1341c4', 2026:'#16a34a' }
-const CORES_VEND = { THIAGO:'#1341c4', WENDEL:'#16a34a', CLEBER:'#dc2626', CLAMALU:'#ea8c00' }
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+const doisMaisRecentes = (lista) => lista.slice(-2)
 function fmtVal(v){if(!v||v===0)return'—';if(v>=1e6)return'R$ '+(v/1e6).toFixed(2).replace('.',',')+' Mi';if(v>=1e3)return'R$ '+(v/1e3).toFixed(0)+' Mil';return'R$ '+Math.round(v)}
 function fmtN(v){if(!v)return'—';return Number(Math.round(v)).toLocaleString('pt-BR')}
 function delta(a,b){if(!a||!b)return null;return((b-a)/a*100)}
@@ -20,7 +20,7 @@ export default function Comparacao({ user }) {
   const router = useRouter()
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [anos, setAnos] = useState([2025, 2026])
+  const [anos, setAnos] = useState([])   // preenchido com os 2 anos mais recentes da base
   const [mesesSel, setMesesSel] = useState([])
   const [fVend, setFVend] = useState([])
   const [sel, setSel] = useState(null) // realce de série: { dim:'ano'|'vendedor', value }
@@ -53,8 +53,17 @@ export default function Comparacao({ user }) {
   function toggleAno(a) { setAnos(prev => prev.includes(a) ? prev.filter(x=>x!==a) : [...prev, a].sort()) }
   function toggleMes(m) { setMesesSel(prev => prev.includes(m) ? prev.filter(x=>x!==m) : [...prev, m].sort()) }
 
+  // anos disponíveis saem da base; o padrão são os 2 mais recentes, para a
+  // tela não continuar comparando 2025x2026 quando virar o ano.
+  const anosOpc = (opcoes.anos || []).map(Number).sort((a,b)=>a-b)
+  useEffect(() => { if (!anos.length && anosOpc.length) setAnos(doisMaisRecentes(anosOpc)) }, [opcoes.anos])
+
   const mesesAtivos = mesesSel.length ? mesesSel : [1,2,3,4,5,6,7,8,9,10,11,12]
   const labels = mesesAtivos.map(m => MESES[m-1])
+
+  // Quem entra no gráfico sai dos DADOS, não de uma lista fixa — era isso que
+  // deixava um vendedor novo (YGOR) de fora mesmo com a API mandando os números.
+  const vendsNoGrafico = Object.keys(dados?.vendMes || {}).sort()
 
   async function exportar() {
     const XLSX = await import('xlsx')
@@ -141,10 +150,10 @@ export default function Comparacao({ user }) {
         <div>
           <span style={st.label}>Anos para comparar</span>
           <div style={{ display:'flex',gap:10 }}>
-            {[2024,2025,2026].map(a=>(
+            {anosOpc.map(a=>(
               <label key={a} style={{ display:'flex',alignItems:'center',gap:6,fontSize:13,fontWeight:600,cursor:'pointer' }}>
-                <input type="checkbox" checked={anos.includes(a)} onChange={()=>toggleAno(a)} style={{ width:15,height:15,accentColor:CORES_ANO[a] }} />
-                <span style={{ color:CORES_ANO[a] }}>{a}</span>
+                <input type="checkbox" checked={anos.includes(a)} onChange={()=>toggleAno(a)} style={{ width:15,height:15,accentColor:corAno(a, anosOpc) }} />
+                <span style={{ color:corAno(a, anosOpc) }}>{a}</span>
               </label>
             ))}
           </div>
@@ -164,7 +173,7 @@ export default function Comparacao({ user }) {
           <MultiSelect options={user?.vendedores?.length ? user.vendedores : opcoes.vendedores} value={fVend} onChange={setFVend} minWidth={130} />
         </div>
         <div style={{ display:'flex',alignItems:'flex-end',gap:8,marginLeft:'auto' }}>
-          <button onClick={()=>{setAnos([2025,2026]);setMesesSel([]);setFVend([])}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>
+          <button onClick={()=>{setAnos(doisMaisRecentes(anosOpc));setMesesSel([]);setFVend([])}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>
           <button onClick={exportar} style={{ padding:'7px 16px',borderRadius:8,border:'none',background:'#16a34a',color:'white',fontSize:12,fontWeight:600,cursor:'pointer' }}>⬇ Exportar Excel</button>
         </div>
       </div>
@@ -175,7 +184,7 @@ export default function Comparacao({ user }) {
       <div style={st.kpiBar}>
         {anos.map(a=>(
           <div key={a} style={st.kpi}>
-            <div style={{ ...st.kpiVal,color:CORES_ANO[a] }}>{loading?'...':fmtVal(dados?.totaisPorAno?.[a]?.valor||0)}</div>
+            <div style={{ ...st.kpiVal,color:corAno(a,anosOpc) }}>{loading?'...':fmtVal(dados?.totaisPorAno?.[a]?.valor||0)}</div>
             <div style={st.kpiLbl}>Total {a}</div>
             <div style={{ fontSize:11,fontWeight:700,color:'rgba(255,255,255,0.6)',marginTop:3 }}>{loading?'':fmtN(dados?.totaisPorAno?.[a]?.qtde||0)} un.</div>
           </div>
@@ -196,11 +205,11 @@ export default function Comparacao({ user }) {
             <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12 }}>
               <span style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99' }}>Valor total mensal — comparativo</span>
               <div style={{ display:'flex',gap:12 }}>
-                {anos.map(a=><div key={a} style={{ display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:'#6b7a99' }}><div style={{ width:22,height:3,background:CORES_ANO[a],borderRadius:2 }}/>{a}</div>)}
+                {anos.map(a=><div key={a} style={{ display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:'#6b7a99' }}><div style={{ width:22,height:3,background:corAno(a,anosOpc),borderRadius:2 }}/>{a}</div>)}
               </div>
             </div>
             <div style={{ height:260 }}>
-              <Line data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.valor||null), borderColor:off('ano',a)?CORES_ANO[a]+'22':CORES_ANO[a], backgroundColor:off('ano',a)?'transparent':CORES_ANO[a]+'18', borderWidth:2.5, pointRadius:4, fill:anos.indexOf(a)===0, tension:0.4, spanGaps:true, borderDash:a===2024?[5,4]:[] })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('ano',anos[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw||0)}`}}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
+              <Line data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.valor||null), borderColor:off('ano',a)?corAno(a,anosOpc)+'22':corAno(a,anosOpc), backgroundColor:off('ano',a)?'transparent':corAno(a,anosOpc)+'18', borderWidth:2.5, pointRadius:4, fill:anos.indexOf(a)===0, tension:0.4, spanGaps:true, borderDash:a===anos[0]&&anos.length>1?[5,4]:[] })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('ano',anos[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw||0)}`}}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
             </div>
           </div>
 
@@ -209,14 +218,14 @@ export default function Comparacao({ user }) {
             <div style={st.card}>
               <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:12 }}>Quantidade mensal</div>
               <div style={{ height:220 }}>
-                <Bar data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.qtde||null), backgroundColor:off('ano',a)?CORES_ANO[a]+'18':CORES_ANO[a]+'bb', borderRadius:4, borderSkipped:false })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('ano',anos[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:10}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{font:{size:10}}}} }} />
+                <Bar data={{ labels, datasets: anos.map(a=>({ label:''+a, data:mesesAtivos.map(m=>dados?.mensal?.[a]?.[m]?.qtde||null), backgroundColor:off('ano',a)?corAno(a,anosOpc)+'18':corAno(a,anosOpc)+'bb', borderRadius:4, borderSkipped:false })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('ano',anos[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:10}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{font:{size:10}}}} }} />
               </div>
             </div>
             {/* VENDEDOR */}
             <div style={st.card}>
               <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:12 }}>Valor por vendedor — {anos[anos.length-1]}</div>
               <div style={{ height:220 }}>
-                <Line data={{ labels, datasets: Object.keys(CORES_VEND).filter(v=>dados?.vendMes?.[v]).map(v=>({ label:v, data:mesesAtivos.map(m=>dados?.vendMes?.[v]?.[anos[anos.length-1]]?.[m]||null), borderColor:off('vendedor',v)?CORES_VEND[v]+'2e':CORES_VEND[v], backgroundColor:'transparent', borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('vendedor',Object.keys(CORES_VEND).filter(v=>dados?.vendMes?.[v])[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:8}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
+                <Line data={{ labels, datasets: vendsNoGrafico.map(v=>({ label:v, data:mesesAtivos.map(m=>dados?.vendMes?.[v]?.[anos[anos.length-1]]?.[m]||null), borderColor:off('vendedor',v)?corVendedor(v,vendsNoGrafico)+'2e':corVendedor(v,vendsNoGrafico), backgroundColor:'transparent', borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true })) }} options={{ responsive:true,maintainAspectRatio:false,onClick:(e,els)=>{if(els.length)pick('vendedor',vendsNoGrafico[els[0].datasetIndex])},interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12,padding:8}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#f0f2f8'},ticks:{callback:v=>fmtVal(v),font:{size:10}}}} }} />
               </div>
             </div>
           </div>
