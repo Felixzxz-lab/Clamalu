@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../../../lib/supabase'
-import { requireAuth, filtrarVendedores } from '../../../lib/auth'
+import { requireAuth, aplicarFiltroVendedor } from '../../../lib/auth'
 import { selectAll } from '../../../lib/db'
 
 export default requireAuth(async function handler(req, res) {
@@ -14,7 +14,6 @@ export default requireAuth(async function handler(req, res) {
   const anosArr = anos ? anos.split(',').map(Number) : []
   const mesesArr = meses ? meses.split(',').map(Number) : null
   const vends = (vendedor || '').split(',').filter(Boolean)
-  const vendsF = filtrarVendedores(req.user, vends) // restrição por responsável
 
   let data
   try {
@@ -22,15 +21,15 @@ export default requireAuth(async function handler(req, res) {
       let q = db.from('vendas').select('ano,mes,vendedor,cliente,produto,uf,qtde,valor_total')
       if (anosArr.length) q = q.in('ano', anosArr)   // vazio = todos os anos
       if (mesesArr?.length) q = q.in('mes', mesesArr)
-      if (vendsF.length) q = q.in('vendedor', vendsF)
+      q = aplicarFiltroVendedor(q, req.user, vends) // esconde os vendedores vetados p/ o usuário
       return q
     })
   } catch (e) {
     return res.status(500).json({ error: e.message })
   }
 
-  // Anos que de fato vieram: o pedido, ou o que existe na base quando não veio
-  // filtro. Nunca uma lista fixa.
+  // Anos que de fato vieram: o pedido, ou o que existe na base quando não
+  // veio filtro. Nunca uma lista fixa.
   const anosEfetivos = anosArr.length
     ? anosArr
     : [...new Set(data.map(r => r.ano).filter(Boolean))].sort((a, b) => a - b)

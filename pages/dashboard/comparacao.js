@@ -170,7 +170,7 @@ export default function Comparacao({ user }) {
         </div>
         <div>
           <span style={st.label}>Vendedor</span>
-          <MultiSelect options={user?.vendedores?.length ? user.vendedores : opcoes.vendedores} value={fVend} onChange={setFVend} minWidth={130} />
+          <MultiSelect options={opcoes.vendedores.filter(v => !(user?.vendedores_ocultos || []).includes(v))} value={fVend} onChange={setFVend} minWidth={130} />
         </div>
         <div style={{ display:'flex',alignItems:'flex-end',gap:8,marginLeft:'auto' }}>
           <button onClick={()=>{setAnos(doisMaisRecentes(anosOpc));setMesesSel([]);setFVend([])}} style={{ padding:'7px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }}>✕ Resetar</button>

@@ -214,7 +214,7 @@ export default function Vendedor({ user }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={st.label}>Vendedor</span>
-          <MultiSelect options={user?.vendedores?.length ? user.vendedores : opcoes.vendedores} value={fVend} onChange={setFVend} accent="#f5d6a3" minWidth={120} />
+          <MultiSelect options={opcoes.vendedores.filter(v => !(user?.vendedores_ocultos || []).includes(v))} value={fVend} onChange={setFVend} accent="#f5d6a3" minWidth={120} />
         </div>
         <button style={st.btnLimpar} onClick={() => { setFAno([]); setFMes([]); setFVend([]) }}>✕ Limpar</button>
         <button style={st.btnExport} onClick={exportar}>⬇ Exportar Excel</button>

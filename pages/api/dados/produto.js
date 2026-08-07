@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../../../lib/supabase'
-import { requireAuth, filtrarVendedores } from '../../../lib/auth'
+import { requireAuth, aplicarFiltroVendedor } from '../../../lib/auth'
 import { selectAll } from '../../../lib/db'
 
 export default requireAuth(async function handler(req, res) {
@@ -9,7 +9,6 @@ export default requireAuth(async function handler(req, res) {
   const anos = (req.query.ano || '').split(',').filter(Boolean).map(Number)
   const meses = (req.query.mes || '').split(',').filter(Boolean).map(Number)
   const vends = (req.query.vendedor || '').split(',').filter(Boolean)
-  const vendsF = filtrarVendedores(req.user, vends) // restrição por responsável
 
   let data
   try {
@@ -17,7 +16,7 @@ export default requireAuth(async function handler(req, res) {
       let q = db.from('vendas').select('produto,uf,qtde,valor_total,ano,mes,vendedor')
       if (anos.length) q = q.in('ano', anos)
       if (meses.length) q = q.in('mes', meses)
-      if (vendsF.length) q = q.in('vendedor', vendsF)
+      q = aplicarFiltroVendedor(q, req.user, vends) // esconde os vendedores vetados p/ o usuário
       return q
     })
   } catch (e) {

@@ -148,7 +148,7 @@ export default function Produto({ user }) {
         <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Mês</span>
           <MultiSelect options={MESES_OPC} value={fMes} onChange={setFMes} accent="#f5a3a3" minWidth={120} /></div>
         <div style={{ display:'flex',alignItems:'center',gap:7 }}><span style={st.label}>Vendedor</span>
-          <MultiSelect options={user?.vendedores?.length ? user.vendedores : opcoes.vendedores} value={fVend} onChange={setFVend} accent="#a3dbb4" minWidth={120} /></div>
+          <MultiSelect options={opcoes.vendedores.filter(v => !(user?.vendedores_ocultos || []).includes(v))} value={fVend} onChange={setFVend} accent="#a3dbb4" minWidth={120} /></div>
         <button style={{ padding:'6px 14px',borderRadius:8,border:'1.5px solid #e2e6f0',background:'white',color:'#6b7a99',fontSize:12,fontWeight:500,cursor:'pointer' }} onClick={()=>{setFAno([]);setFMes([]);setFVend([])}}>✕ Limpar</button>
         <button style={{ marginLeft:'auto',padding:'6px 16px',borderRadius:8,border:'none',background:'#16a34a',color:'white',fontSize:12,fontWeight:600,cursor:'pointer' }} onClick={exportar}>⬇ Exportar Excel</button>
       </div>

@@ -11,7 +11,7 @@ export default function Admin({ user }) {
   const [usuarios, setUsuarios] = useState([])
   const [uploads, setUploads] = useState([])
   const [aba, setAba] = useState('usuarios')
-  const [form, setForm] = useState({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'], vendedores:[] })
+  const [form, setForm] = useState({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'], vendedores_ocultos:[] })
   const [editId, setEditId] = useState(null)
   const [msg, setMsg] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -61,7 +61,7 @@ export default function Admin({ user }) {
     const d = await r.json()
     if (!r.ok) { setMsg('Erro: ' + d.error); return }
     setMsg(editId ? 'Usuário atualizado!' : 'Usuário criado!')
-    setForm({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'], vendedores:[] })
+    setForm({ nome:'', email:'', senha:'', role:'cliente', paginas:['vendedor','produto','cliente','comparacao'], vendedores_ocultos:[] })
     setEditId(null)
     carregarUsuarios()
   }
@@ -74,7 +74,7 @@ export default function Admin({ user }) {
 
   function editarUsuario(u) {
     setEditId(u.id)
-    setForm({ nome: u.nome, email: u.email, senha:'', role: u.role, paginas: u.paginas, vendedores: u.vendedores || [] })
+    setForm({ nome: u.nome, email: u.email, senha:'', role: u.role, paginas: u.paginas, vendedores_ocultos: u.vendedores_ocultos || [] })
     setAba('usuarios')
     window.scrollTo(0,0)
   }
@@ -212,7 +212,7 @@ export default function Admin({ user }) {
     setForm(f => ({ ...f, paginas: f.paginas.includes(p) ? f.paginas.filter(x=>x!==p) : [...f.paginas, p] }))
   }
   const toggleVendedor = (v) => {
-    setForm(f => ({ ...f, vendedores: (f.vendedores||[]).includes(v) ? f.vendedores.filter(x=>x!==v) : [...(f.vendedores||[]), v] }))
+    setForm(f => ({ ...f, vendedores_ocultos: (f.vendedores_ocultos||[]).includes(v) ? f.vendedores_ocultos.filter(x=>x!==v) : [...(f.vendedores_ocultos||[]), v] }))
   }
 
   const st = {
@@ -288,12 +288,12 @@ export default function Admin({ user }) {
                       </label>
                     ))}
                   </div>
-                  <label style={st.label}>Responsáveis que este usuário pode ver nos filtros <span style={{textTransform:'none',fontWeight:500,color:'#9aa6bf'}}>(nenhum marcado = vê todos)</span></label>
+                  <label style={st.label}>Responsáveis que este usuário NÃO vê <span style={{textTransform:'none',fontWeight:500,color:'#9aa6bf'}}>(nenhum marcado = vê todos, inclusive os que entrarem depois)</span></label>
                   <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap'}}>
                     {responsaveis.map(v => {
-                      const on = (form.vendedores||[]).includes(v)
+                      const on = (form.vendedores_ocultos||[]).includes(v)
                       return (
-                      <label key={v} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:600,cursor:'pointer',padding:'6px 14px',borderRadius:8,border:`1.5px solid ${on?'#16a34a':'#e2e6f0'}`,background:on?'#dcfce7':'white',color:on?'#15803d':'#6b7a99'}}>
+                      <label key={v} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:600,cursor:'pointer',padding:'6px 14px',borderRadius:8,border:`1.5px solid ${on?'#dc2626':'#e2e6f0'}`,background:on?'#fee2e2':'white',color:on?'#b91c1c':'#6b7a99'}}>
                         <input type="checkbox" checked={on} onChange={()=>toggleVendedor(v)} style={{display:'none'}} />
                         {v}
                       </label>
@@ -303,7 +303,7 @@ export default function Admin({ user }) {
                   {msg && <p style={{color: msg.includes('Erro')?'#dc2626':'#16a34a',fontSize:12,marginBottom:10}}>{msg}</p>}
                   <div style={{display:'flex',gap:8}}>
                     <button type="submit" style={st.btn}>{editId ? 'Salvar alterações' : 'Criar usuário'}</button>
-                    {editId && <button type="button" onClick={()=>{setEditId(null);setForm({nome:'',email:'',senha:'',role:'cliente',paginas:PAGINAS_PADRAO,vendedores:[]})}} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>}
+                    {editId && <button type="button" onClick={()=>{setEditId(null);setForm({nome:'',email:'',senha:'',role:'cliente',paginas:PAGINAS_PADRAO,vendedores_ocultos:[]})}} style={{...st.btn,background:'#6b7a99'}}>Cancelar</button>}
                   </div>
                 </form>
               </div>
@@ -320,7 +320,7 @@ export default function Admin({ user }) {
                         <td style={st.td}><strong>{u.nome}</strong></td>
                         <td style={st.td}>{u.email}</td>
                         <td style={st.td}><span style={st.badge(u.role)}>{u.role === 'admin' ? '🔑 Admin' : '👤 Cliente'}</span></td>
-                        <td style={st.td}>{(u.paginas||[]).join(', ')}{u.vendedores?.length ? <span style={{display:'block',fontSize:10,color:'#15803d',fontWeight:600}}>👤 só: {u.vendedores.join(', ')}</span> : <span style={{display:'block',fontSize:10,color:'#9aa6bf'}}>👤 todos os responsáveis</span>}</td>
+                        <td style={st.td}>{(u.paginas||[]).join(', ')}{u.vendedores_ocultos?.length ? <span style={{display:'block',fontSize:10,color:'#b91c1c',fontWeight:600}}>🚫 não vê: {u.vendedores_ocultos.join(', ')}</span> : <span style={{display:'block',fontSize:10,color:'#9aa6bf'}}>👤 todos os responsáveis</span>}</td>
                         <td style={st.td}><span style={{padding:'2px 8px',borderRadius:10,fontSize:10,fontWeight:700,background:u.ativo?'#dcfce7':'#fef2f2',color:u.ativo?'#15803d':'#dc2626'}}>{u.ativo?'Ativo':'Inativo'}</span></td>
                         <td style={st.td}>
                           <div style={{display:'flex',gap:6}}>
