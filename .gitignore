@@ -30,3 +30,13 @@ TERMO*.pdf
 # pasta inteira de documentos (contratos com CPF/CNPJ)
 documentos clamalu/
 documentos*/
+
+# planilhas do cliente (dados financeiros reais — repo é publico)
+# "Planilhas/*" e nao "Planilhas/": com a pasta inteira ignorada o git nao entra
+# nela e a excecao do MODELO abaixo nunca seria avaliada.
+Planilhas/*
+*.xlsx
+*.xls
+*.ods
+# excecao: o MODELO em branco pode ser versionado (nao tem dado real)
+!Planilhas/MODELO_*.xlsx
