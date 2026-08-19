@@ -5,7 +5,7 @@ import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
 import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler } from 'chart.js'
-import { RealceBanner } from '../../components/realce'
+import { RealceBanner } from '../../components/RealceBanner'
 import { MultiSelect, useOpcoes } from '../../components/MultiSelect'
 import { corVendedor, corAno } from '../../lib/cores'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)

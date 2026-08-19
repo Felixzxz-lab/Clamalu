@@ -6,7 +6,7 @@ import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
 import { fade, aggBy, contribui, tabelaAgrupada } from '../../lib/realce'
-import { RealceBanner } from '../../components/realce'
+import { RealceBanner } from '../../components/RealceBanner'
 import { MultiSelect, MESES_OPC, useOpcoes } from '../../components/MultiSelect'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
