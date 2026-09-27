@@ -15,6 +15,7 @@ Login próprio, com controle de quais páginas e quais vendedores cada usuário 
 pages/                 rotas (o Next liga arquivo -> URL; não mova)
   index.js               / .................. login
   admin/index.js         /admin ............. painel do admin
+  apresentacao.js        /apresentacao ...... deck semanal (botão ▶ Apresentação; PDF = Imprimir)
   dashboard/*.js         /dashboard/* ....... as 7 telas (culturas/enzimas = mapeamento)
   api/auth/*             login, logout, me
   api/admin/*            usuários, upload e prévia de vendas e de despesas
@@ -28,6 +29,7 @@ lib/                   regra de negócio, sem React
   despesas.js            leitura da planilha de DESPESAS + classificação em grupos
   cores.js               paleta (aprovada em teste de daltonismo)
   realce.js              helpers do realce cruzado
+  apresentacao.js        números de cada slide do deck semanal
   duplicatas.js          trava contra importar a mesma venda duas vezes
   mapeamento.js          leitura + limpeza da planilha de mapeamento de mercado e agregações
   paginas.js             lista de páginas do menu/permissões (página nova entra aqui)

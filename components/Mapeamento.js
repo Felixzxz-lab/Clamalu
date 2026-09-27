@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { MultiSelect } from './MultiSelect'
-import { PAGINA_IDS, nomePagina } from '../lib/paginas'
+import { PAGINA_IDS, nomePagina, podeApresentar } from '../lib/paginas'
 import { COR_UFS } from './ParticipacaoUf'
 import { ufsDe, tabelaUf, clientesPorUf, volumePorUf, rendimento, sharePorUf, rotulo } from '../lib/mapeamento'
 
@@ -172,6 +172,7 @@ export default function Mapeamento({ user, categoria }) {
               {nomePagina(p)}
             </button>
           ))}
+          {podeApresentar(user) && <button onClick={() => router.push('/apresentacao')} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: '#16a34a', color: 'white', marginLeft: 8 }}>▶ Apresentação</button>}
           {user?.role === 'admin' && <button onClick={() => router.push('/admin')} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.15)', color: 'white', marginLeft: 8 }}>⚙ Admin</button>}
           <button onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/') }} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, background: 'rgba(220,38,38,0.7)', color: 'white', marginLeft: 4 }}>Sair</button>
         </div>
