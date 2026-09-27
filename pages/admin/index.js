@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import { PAGINA_IDS, nomePagina } from '../../lib/paginas'
 
-const PAGINAS = ['vendedor','produto','cliente','comparacao','financeiro']
+const PAGINAS = PAGINA_IDS
 const PAGINAS_PADRAO = ['vendedor','produto','cliente','comparacao'] // novos usuários (financeiro é concedido à parte)
 const RESPONSAVEIS_FALLBACK = ['CLAMALU','CLEBER','THIAGO','WENDEL','YGOR'] // só usado se /api/dados/opcoes falhar
 
@@ -284,7 +285,7 @@ export default function Admin({ user }) {
                     {PAGINAS.map(p => (
                       <label key={p} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:600,cursor:'pointer',padding:'6px 14px',borderRadius:8,border:`1.5px solid ${form.paginas.includes(p)?'#1341c4':'#e2e6f0'}`,background:form.paginas.includes(p)?'#e8eeff':'white',color:form.paginas.includes(p)?'#1341c4':'#6b7a99'}}>
                         <input type="checkbox" checked={form.paginas.includes(p)} onChange={()=>togglePagina(p)} style={{display:'none'}} />
-                        {p.charAt(0).toUpperCase()+p.slice(1)}
+                        {nomePagina(p)}
                       </label>
                     ))}
                   </div>

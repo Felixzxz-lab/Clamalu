@@ -10,6 +10,7 @@ import { recortes, somaPor, curva, nomeMes } from '../../lib/periodo'
 import { RealceBanner } from '../../components/RealceBanner'
 import { ParticipacaoUf } from '../../components/ParticipacaoUf'
 import { MultiSelect, MESES_OPC, useOpcoes } from '../../components/MultiSelect'
+import { PAGINA_IDS, nomePagina } from '../../lib/paginas'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
 function fmtVal(v){if(!v)return'—';if(v>=1e6)return'R$ '+(v/1e6).toFixed(2).replace('.',',')+' Mi';if(v>=1e3)return'R$ '+(v/1e3).toFixed(0)+' Mil';return'R$ '+Math.round(v)}
@@ -150,9 +151,9 @@ export default function Cliente({ user }) {
           <div><div style={{ color:'white',fontSize:16,fontWeight:700 }}>Clamalu</div><div style={{ color:'rgba(255,255,255,0.5)',fontSize:11 }}>Representações · Insumos</div></div>
         </div>
         <div style={{ display:'flex',gap:4 }}>
-          {['vendedor','produto','cliente','comparacao','financeiro'].filter(p=>user?.paginas?.includes(p)).map(p=>(
+          {PAGINA_IDS.filter(p=>user?.paginas?.includes(p)).map(p=>(
             <button key={p} onClick={()=>router.push('/dashboard/'+p)} style={{ padding:'7px 18px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,textTransform:'uppercase',background:p==='cliente'?'white':'rgba(255,255,255,0.1)',color:p==='cliente'?'#0b2a8a':'rgba(255,255,255,0.75)' }}>
-              {p==='comparacao'?'Comparação':p.charAt(0).toUpperCase()+p.slice(1)}
+              {nomePagina(p)}
             </button>
           ))}
           {user?.role==='admin'&&<button onClick={()=>router.push('/admin')} style={{ padding:'7px 14px',borderRadius:8,border:'none',cursor:'pointer',fontSize:11,fontWeight:600,background:'rgba(255,255,255,0.15)',color:'white',marginLeft:8 }}>⚙ Admin</button>}

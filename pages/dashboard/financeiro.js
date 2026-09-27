@@ -6,9 +6,9 @@ import { verifyToken } from '../../lib/auth'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
 import { MultiSelect, MESES_OPC } from '../../components/MultiSelect'
+import { PAGINA_IDS, nomePagina } from '../../lib/paginas'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-const PAGINAS = ['vendedor', 'produto', 'cliente', 'comparacao', 'financeiro']
 const MES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 // paleta para os grupos de despesa (tons quentes/frios distintos)
 const PALETA = ['#0b2a8a', '#1341c4', '#2a5ae0', '#ea8c00', '#16a34a', '#dc2626', '#7c3aed', '#0891b2', '#c026d3', '#65a30d', '#e11d48', '#0d9488', '#9333ea', '#f59e0b', '#475569', '#b45309']
@@ -187,10 +187,10 @@ export default function Financeiro({ user }) {
           <div><div style={{ color: 'white', fontSize: 16, fontWeight: 700 }}>Clamalu</div><div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Representações · Insumos</div></div>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
-          {PAGINAS.filter(p => user?.paginas?.includes(p)).map(p => (
+          {PAGINA_IDS.filter(p => user?.paginas?.includes(p)).map(p => (
             <button key={p} onClick={() => router.push('/dashboard/' + p)}
               style={{ padding: '7px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', background: p === 'financeiro' ? 'white' : 'rgba(255,255,255,0.1)', color: p === 'financeiro' ? '#0b2a8a' : 'rgba(255,255,255,0.75)' }}>
-              {p === 'comparacao' ? 'Comparação' : p.charAt(0).toUpperCase() + p.slice(1)}
+              {nomePagina(p)}
             </button>
           ))}
           {user?.role === 'admin' && <button onClick={() => router.push('/admin')} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.15)', color: 'white', marginLeft: 8 }}>⚙ Admin</button>}

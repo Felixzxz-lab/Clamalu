@@ -15,7 +15,7 @@ Login próprio, com controle de quais páginas e quais vendedores cada usuário 
 pages/                 rotas (o Next liga arquivo -> URL; não mova)
   index.js               / .................. login
   admin/index.js         /admin ............. painel do admin
-  dashboard/*.js         /dashboard/* ....... as 5 telas de relatório
+  dashboard/*.js         /dashboard/* ....... as 7 telas (culturas/enzimas = mapeamento)
   api/auth/*             login, logout, me
   api/admin/*            usuários, upload e prévia de vendas e de despesas
   api/dados/*            o que alimenta cada tela (já com o filtro de acesso)
@@ -29,10 +29,13 @@ lib/                   regra de negócio, sem React
   cores.js               paleta (aprovada em teste de daltonismo)
   realce.js              helpers do realce cruzado
   duplicatas.js          trava contra importar a mesma venda duas vezes
+  mapeamento.js          leitura + limpeza da planilha de mapeamento de mercado e agregações
+  paginas.js             lista de páginas do menu/permissões (página nova entra aqui)
   segmentos.js           produto -> Culturas / Enzimas / Outros (regra do cliente)
   periodo.js             recortes 'mês fechado' x 'acumulado do ano' e faixas (70%...)
 
-components/            React reaproveitado (Layout, MultiSelect, RealceBanner, ParticipacaoUf)
+components/            React reaproveitado (Layout, MultiSelect, RealceBanner, ParticipacaoUf, Mapeamento)
+scripts/               carga manual (hoje: carregar-mapeamento.mjs)
 db/                    os SQL que já foram rodados no Supabase — ver db/README.md
 docs/                  o padrão da planilha que o cliente precisa seguir
 Planilhas/             planilhas do cliente (fora do Git) + o MODELO em branco
@@ -74,7 +77,11 @@ Push na `main` → a Vercel builda sozinha, **a partir da raiz do repositório**
    é pulada — a prévia avisa quantas (`lib/duplicatas.js`).
 2. **Despesas** — Admin → Despesas. Substitui por **ano + mês**: só os meses que
    estão no arquivo. Re-subir um mês corrigido não duplica.
-3. Conferir na **prévia** antes de confirmar — ela mostra ano, meses, total e
+3. **Mapeamento de mercado** (quando o cliente mandar planilha nova, não é mensal):
+   `node scripts/carregar-mapeamento.mjs "<arquivo>.xlsx"` mostra o resumo;
+   com `--gravar` substitui as categorias do arquivo. O que cair em "Não informado"
+   ou em "IGNORADAS" se resolve no dicionário de `lib/mapeamento.js`.
+4. Conferir na **prévia** antes de confirmar — ela mostra ano, meses, total e
    distribuição por grupo sem gravar nada.
 
 O formato que a planilha de despesas precisa ter está em

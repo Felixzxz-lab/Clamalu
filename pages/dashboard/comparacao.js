@@ -8,6 +8,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 import { RealceBanner } from '../../components/RealceBanner'
 import { MultiSelect, useOpcoes } from '../../components/MultiSelect'
 import { corVendedor, corAno } from '../../lib/cores'
+import { PAGINA_IDS, nomePagina } from '../../lib/paginas'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler)
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
@@ -215,9 +216,9 @@ export default function Comparacao({ user }) {
           <div><div style={{ color:'white',fontSize:16,fontWeight:700 }}>Clamalu</div><div style={{ color:'rgba(255,255,255,0.5)',fontSize:11 }}>Representações · Insumos</div></div>
         </div>
         <div style={{ display:'flex',gap:4 }}>
-          {['vendedor','produto','cliente','comparacao','financeiro'].filter(p=>user?.paginas?.includes(p)).map(p=>(
+          {PAGINA_IDS.filter(p=>user?.paginas?.includes(p)).map(p=>(
             <button key={p} onClick={()=>router.push('/dashboard/'+p)} style={{ padding:'7px 18px',borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,textTransform:'uppercase',background:p==='comparacao'?'white':'rgba(255,255,255,0.1)',color:p==='comparacao'?'#0b2a8a':'rgba(255,255,255,0.75)' }}>
-              {p==='comparacao'?'Comparação':p.charAt(0).toUpperCase()+p.slice(1)}
+              {nomePagina(p)}
             </button>
           ))}
           {user?.role==='admin'&&<button onClick={()=>router.push('/admin')} style={{ padding:'7px 14px',borderRadius:8,border:'none',cursor:'pointer',fontSize:11,fontWeight:600,background:'rgba(255,255,255,0.15)',color:'white',marginLeft:8 }}>⚙ Admin</button>}

@@ -15,6 +15,7 @@ quebra nada.
 | 02 | `02_despesas.sql` | tabela `despesas` (módulo Financeiro) + libera a página `financeiro` para o admin | ✅ 10/07/2026 |
 | 03 | `03_usuarios_responsaveis.sql` | coluna `usuarios.vendedores` — **substituído pelo 04**, ver abaixo | ✅ 10/07/2026 |
 | 04 | `04_vendedores_ocultos.sql` | coluna `usuarios.vendedores_ocultos` e converte a lista do 03 | ✅ 19/08/2026 |
+| 05 | `05_mapeamento.sql` | tabela `mapeamento` (Culturas e Enzimas) + libera as 2 páginas para o admin | ✅ 27/09/2026 |
 
 ### Sobre o 03 → 04
 
