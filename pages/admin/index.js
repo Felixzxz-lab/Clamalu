@@ -121,7 +121,7 @@ export default function Admin({ user }) {
     const totalSel = previa.abas.filter(a => abasSel.includes(a.nome)).reduce((s, a) => s + a.totalLinhas, 0)
     const aviso = limparAntes
       ? `Isto vai APAGAR todos os dados atuais e importar ${totalSel.toLocaleString('pt-BR')} linhas. Continuar?`
-      : `Isto vai ADICIONAR ${totalSel.toLocaleString('pt-BR')} linhas aos dados já existentes. Continuar?`
+      : `Isto vai ADICIONAR as linhas novas aos dados já existentes (${totalSel.toLocaleString('pt-BR')} no arquivo; as que já estiverem na base são puladas). Continuar?`
     if (!confirm(aviso)) return
     setUploading(true); setUploadMsg('Importando...')
     try {
@@ -131,7 +131,7 @@ export default function Admin({ user }) {
       })
       const d = await r.json()
       if (r.ok) {
-        setUploadMsg(`✅ ${d.total.toLocaleString('pt-BR')} registros importados${d.limpou ? ' (dados anteriores apagados)' : ' e somados aos existentes'}!`)
+        setUploadMsg(`✅ ${d.total.toLocaleString('pt-BR')} registros importados${d.limpou ? ' (dados anteriores apagados)' : ' e somados aos existentes'}${d.repetidas ? ` · ${d.repetidas.toLocaleString('pt-BR')} já estavam na base e foram puladas` : ''}!`)
         setArquivo(null); setPrevia(null); setAbasSel([]); setLimparAntes(false)
         if (fileRef.current) fileRef.current.value = ''
         carregarUploads()
@@ -374,6 +374,7 @@ export default function Admin({ user }) {
                             {a.totalLinhas.toLocaleString('pt-BR')} linhas · {a.clientesDistintos} clientes · {a.valorTotal.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
                             {a.periodo && ` · ${a.periodo.de} a ${a.periodo.ate}`}
                             {a.semData > 0 && <span style={{color:'#b45309'}}> · ⚠️ {a.semData} sem data</span>}
+                            {a.jaNaBase > 0 && <span style={{color:'#b45309',fontWeight:700}}> · ⚠️ {a.jaNaBase.toLocaleString('pt-BR')} já estão na base (serão puladas)</span>}
                           </span>
                         </label>
 

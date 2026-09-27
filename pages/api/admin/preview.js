@@ -1,5 +1,7 @@
 import { requireAdmin } from '../../../lib/auth'
 import { mapRow, isVazia } from '../../../lib/planilha'
+import { separarJaImportadas } from '../../../lib/duplicatas'
+import { supabaseAdmin } from '../../../lib/supabase'
 import * as XLSX from 'xlsx'
 
 export const config = { api: { bodyParser: { sizeLimit: '25mb' } } }
@@ -16,7 +18,8 @@ export default requireAdmin(async function handler(req, res) {
     const buf = Buffer.from(fileData, 'base64')
     const wb = XLSX.read(buf, { type: 'buffer', cellDates: true })
 
-    const abas = wb.SheetNames.map(nome => {
+    const db = supabaseAdmin()
+    const abas = await Promise.all(wb.SheetNames.map(async nome => {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[nome], { defval: null })
       const colunas = Object.keys(rows[0] || {})
       const mapeadas = rows.map(mapRow).filter(v => !isVazia(v))
@@ -34,9 +37,13 @@ export default requireAdmin(async function handler(req, res) {
         }
       }
 
+      // quantas linhas desta aba já estão na base (seriam puladas na importação)
+      const { repetidas } = mapeadas.length ? await separarJaImportadas(db, mapeadas) : { repetidas: [] }
+
       return {
         nome,
         totalLinhas: mapeadas.length,
+        jaNaBase: repetidas.length,
         colunas,
         clientesDistintos: clientes.size,
         valorTotal: Math.round(valorTotal * 100) / 100,
@@ -47,7 +54,7 @@ export default requireAdmin(async function handler(req, res) {
           produto: v.produto, qtde: v.qtde, valor_total: v.valor_total, vendedor: v.vendedor
         }))
       }
-    })
+    }))
 
     return res.status(200).json({ abas })
   } catch (e) {

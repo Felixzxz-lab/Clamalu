@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../lib/supabase'
 import { requireAdmin } from '../../../lib/auth'
 import { mapRow, isVazia } from '../../../lib/planilha'
+import { separarJaImportadas } from '../../../lib/duplicatas'
 import * as XLSX from 'xlsx'
 
 export const config = { api: { bodyParser: { sizeLimit: '25mb' } } }
@@ -27,10 +28,14 @@ export default requireAdmin(async function handler(req, res) {
       brutas = brutas.concat(rows)
     }
 
-    const vendas = brutas.map(mapRow).filter(v => !isVazia(v))
-    if (!vendas.length) return res.status(400).json({ error: 'Nenhuma linha com dados encontrada nas abas selecionadas' })
+    const lidas = brutas.map(mapRow).filter(v => !isVazia(v))
+    if (!lidas.length) return res.status(400).json({ error: 'Nenhuma linha com dados encontrada nas abas selecionadas' })
 
     const db = supabaseAdmin()
+
+    // pula o que já está na base (lib/duplicatas.js) — numa carga limpa não há o que comparar
+    const { novas: vendas, repetidas } = limparAntes ? { novas: lidas, repetidas: [] } : await separarJaImportadas(db, lidas)
+    if (!vendas.length) return res.status(200).json({ ok: true, total: 0, repetidas: repetidas.length, abas, limpou: false })
 
     // opcional: limpar tudo antes (carga limpa). Por padrão acumula.
     if (limparAntes) await db.from('vendas').delete().neq('id', 0)
@@ -49,7 +54,7 @@ export default requireAdmin(async function handler(req, res) {
       if (error) throw new Error(error.message)
     }
 
-    return res.status(200).json({ ok: true, total: vendas.length, abas, limpou: !!limparAntes })
+    return res.status(200).json({ ok: true, total: vendas.length, repetidas: repetidas.length, abas, limpou: !!limparAntes })
   } catch (e) {
     return res.status(500).json({ error: e.message })
   }

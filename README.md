@@ -28,6 +28,7 @@ lib/                   regra de negócio, sem React
   despesas.js            leitura da planilha de DESPESAS + classificação em grupos
   cores.js               paleta (aprovada em teste de daltonismo)
   realce.js              helpers do realce cruzado
+  duplicatas.js          trava contra importar a mesma venda duas vezes
   segmentos.js           produto -> Culturas / Enzimas / Outros (regra do cliente)
   periodo.js             recortes 'mês fechado' x 'acumulado do ano' e faixas (70%...)
 
@@ -69,6 +70,8 @@ Push na `main` → a Vercel builda sozinha, **a partir da raiz do repositório**
 ## Rotina mensal
 
 1. **Vendas** — Admin → Upload. Acumulativo: soma ao que já existe, não substitui.
+   Linha que já está na base (mesma NF, data, cliente, produto, qtde e valor)
+   é pulada — a prévia avisa quantas (`lib/duplicatas.js`).
 2. **Despesas** — Admin → Despesas. Substitui por **ano + mês**: só os meses que
    estão no arquivo. Re-subir um mês corrigido não duplica.
 3. Conferir na **prévia** antes de confirmar — ela mostra ano, meses, total e
