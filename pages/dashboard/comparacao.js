@@ -73,6 +73,19 @@ export default function Comparacao({ user }) {
       rows.push([MESES[m-1], ...anos.flatMap(a => [dados?.mensal?.[a]?.[m]?.valor||0, dados?.mensal?.[a]?.[m]?.qtde||0])])
     })
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Comparativo')
+    if (doComp) {
+      const r2 = v => Math.round(v * 100) / 100
+      const prod = [['Movimento','Produto',String(aBase),String(aComp),'Diferença']]
+      produtosQueCresceram.forEach(p => prod.push(['Cresceu', p.chave, p.v0, p.v1, p.diff]))
+      produtosQueCairam.forEach(p => prod.push(['Caiu', p.chave, p.v0, p.v1, p.diff]))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prod), 'Produtos alta e queda')
+      const cli = [['Movimento','Cliente','UF',String(aBase),String(aComp),'Diferença','Produto que explica','Dif. no produto','Mês','Dif. no mês']]
+      ;[...cliCresceram, ...cliCairam].forEach(c => cli.push([c.diff>=0?'Cresceu':'Caiu', c.cliente, c.uf, r2(c.v0), r2(c.v1), r2(c.diff), c.produto, r2(c.produtoDiff), MESES[c.mesNum-1], r2(c.mesDiff)]))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cli), 'Clientes alta e queda')
+      const cur = [['Faixa','Posição','Cliente','UF',String(aComp),'%','Acumulado %','Posição em '+aBase,String(aBase),'Diferença','Produto que explica','Mês']]
+      ;[['20%', curvaFat.f20], ['50%', curvaFat.f50]].forEach(([f, l]) => l.forEach(c => cur.push([f, c.pos, c.cliente, c.uf, r2(c.v1), r2(c.share), r2(c.acum), c.posAnt || 'novo', r2(c.v0), r2(c.diff), c.produto, MESES[c.mesNum-1]])))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cur), 'Curva 20 e 50')
+    }
     XLSX.writeFile(wb, 'Clamalu_Comparacao.xlsx')
   }
 
@@ -91,10 +104,17 @@ export default function Comparacao({ user }) {
   }
 
   // ---- Comparativos por produto e por cliente (mês a mês), a partir das linhas ----
-  const linhasC = dados?.linhas || []
   const aBase = anos[0], aComp = anos[anos.length-1]
   const doComp = anos.length >= 2 && aBase !== aComp
-  const perLabel = mesesSel.length===1 ? MESES[mesesSel[0]-1] : (mesesSel.length ? mesesSel.map(m=>MESES[m-1]).join(', ') : 'Ano (todos os meses)')
+  // Período comparável: só os meses que já têm venda no ano comparado. Sem
+  // isso, jan–dez do ano base contra jan–ago do ano corrente fazia tudo "cair".
+  const mesesComComp = new Set((dados?.linhas || []).filter(r => r.ano === aComp).map(r => r.mes))
+  const mesesComp = mesesAtivos.filter(m => mesesComComp.has(m))
+  const linhasC = (dados?.linhas || []).filter(r => !doComp || mesesComComp.size === 0 || mesesComComp.has(r.mes))
+  const faixaMeses = ms => ms.length === 12 ? 'Ano inteiro'
+    : ms.length > 2 && ms.every((m, i) => i === 0 || m === ms[i-1] + 1) ? `${MESES[ms[0]-1]} a ${MESES[ms[ms.length-1]-1]}`
+    : ms.map(m => MESES[m-1]).join(', ')
+  const perLabel = doComp && mesesComComp.size ? `${faixaMeses(mesesComp)} (meses com venda em ${aComp})` : faixaMeses(mesesAtivos)
   const varCell = v => v===null||v===undefined ? <span style={{ color:'#9ca3af' }}>—</span> : <span style={{ color:v>=0?'#16a34a':'#dc2626',fontWeight:700,whiteSpace:'nowrap' }}>{v>=0?'▲':'▼'} {Math.abs(v).toFixed(1)}%</span>
   function aggComp(key){
     const m={}
@@ -125,6 +145,66 @@ export default function Comparacao({ user }) {
   const zeradosTop = zerados.slice(0,25)
   const zeradosTotal = zerados.reduce((s,z)=>s+z.v0,0)
   const zeradosClientes = new Set(zerados.map(z=>z.cliente)).size
+
+  // Espelho do bloco de queda (pedido de 21/09/2026)
+  const produtosQueCresceram = doComp ? porProduto.map(p=>({ ...p, diff:Math.round((p.v1-p.v0)*100)/100 })).filter(p=>p.diff>0).sort((a,b)=>b.diff-a.diff).slice(0,10) : []
+
+  // Por cliente: variação total + o produto e o mês que mais explicam ela.
+  // "Explica" = maior diferença no MESMO sentido da variação do cliente.
+  const movCliente = (() => {
+    if (!doComp) return {}
+    const m = {}
+    for (const r of linhasC) {
+      if (r.ano !== aBase && r.ano !== aComp) continue
+      const o = m[r.cliente] = m[r.cliente] || { cliente:r.cliente, uf:r.uf, v0:0, v1:0, prod:{}, mes:{} }
+      const s = r.ano === aComp ? 1 : -1
+      if (s > 0) o.v1 += r.valor_total; else o.v0 += r.valor_total
+      o.prod[r.produto] = (o.prod[r.produto]||0) + s*r.valor_total
+      o.mes[r.mes] = (o.mes[r.mes]||0) + s*r.valor_total
+    }
+    const maior = (obj, sinal) => Object.entries(obj).reduce((best, [k, v]) => (best === null || v*sinal > best[1]*sinal) ? [k, v] : best, null)
+    for (const o of Object.values(m)) {
+      o.diff = o.v1 - o.v0
+      o.pct = o.v0 > 0 ? o.diff / o.v0 * 100 : null
+      const sinal = o.diff >= 0 ? 1 : -1
+      const [prod, prodDiff] = maior(o.prod, sinal) || [null, 0]
+      const [mes, mesDiff] = maior(o.mes, sinal) || [null, 0]
+      Object.assign(o, { produto:prod, produtoDiff:prodDiff, mesNum:Number(mes), mesDiff })
+      delete o.prod; delete o.mes
+    }
+    return m
+  })()
+  const movs = Object.values(movCliente)
+  const cliCresceram = movs.filter(c=>c.diff>0).sort((a,b)=>b.diff-a.diff).slice(0,10)
+  const cliCairam = movs.filter(c=>c.diff<0).sort((a,b)=>a.diff-b.diff).slice(0,10)
+
+  function linhaMov(c) {
+    const alta = c.diff >= 0, cor = alta ? '#16a34a' : '#dc2626'
+    const sinal = v => (v >= 0 ? '+ ' : '− ') + fmtVal(Math.abs(v))
+    return (
+      <tr key={c.cliente}>
+        <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{c.cliente}<div style={{ fontSize:10,color:'#9aa6bf',fontWeight:500 }}>{c.uf}</div></td>
+        <td style={{ ...st.td,whiteSpace:'nowrap' }}>
+          <span style={{ color:cor,fontWeight:700 }}>{alta?'▲':'▼'} {fmtVal(Math.abs(c.diff))}</span>
+          <div style={{ fontSize:10,color:'#9aa6bf' }}>{c.pct==null ? 'novo' : (c.pct>0?'+':'')+c.pct.toFixed(1).replace('.',',')+'%'}</div>
+        </td>
+        <td style={{ ...st.td,textAlign:'left',fontSize:11 }}>{c.produto}<div style={{ fontSize:10,color:'#9aa6bf' }}>{sinal(c.produtoDiff)}</div></td>
+        <td style={{ ...st.td,textAlign:'left',fontSize:11 }}><b>{MESES[c.mesNum-1]}</b><div style={{ fontSize:10,color:'#9aa6bf' }}>{sinal(c.mesDiff)}</div></td>
+      </tr>
+    )
+  }
+
+  // Curva de 20% e 50% do faturamento no ano comparado, com a posição que o
+  // cliente ocupava no ano base (mesmos meses) e o motivo do salto.
+  const curvaFat = (() => {
+    if (!doComp) return { f20:[], f50:[], tot:0 }
+    const rk = campo => movs.filter(c=>c[campo]>0).sort((a,b)=>b[campo]-a[campo])
+    const atual = rk('v1'), antes = rk('v0')
+    const posAnt = Object.fromEntries(antes.map((c,i)=>[c.cliente, i+1]))
+    const tot = atual.reduce((s,c)=>s+c.v1, 0)
+    const faixa = lim => { const out=[]; let ac=0; for (const [i,c] of atual.entries()) { if (ac >= lim) break; ac += c.v1/tot*100; out.push({ ...c, pos:i+1, posAnt:posAnt[c.cliente]||null, share:c.v1/tot*100, acum:ac }) } return out }
+    return { f20:faixa(20), f50:faixa(50), tot:atual.length }
+  })()
 
   return (
     <div style={{ minHeight:'100vh',background:'#f4f6fb',fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:13 }}>
@@ -259,26 +339,96 @@ export default function Comparacao({ user }) {
             </div>
           )}
 
-          {/* TOP PRODUTOS QUE CAÍRAM */}
+          {/* PRODUTOS QUE MAIS CRESCERAM x MAIS CAÍRAM */}
+          {doComp && (
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
+              {[
+                { titulo:'Top 10 produtos que mais cresceram', lista:produtosQueCresceram, alta:true },
+                { titulo:'Top 10 produtos que mais caíram', lista:produtosQueCairam, alta:false },
+              ].map(b => (
+                <div key={b.titulo} style={st.card}>
+                  <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>{b.titulo} — {aBase} → {aComp}</div>
+                  <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:14 }}>Período: <strong>{perLabel}</strong></div>
+                  <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                    <thead><tr><th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Produto</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>{b.alta?'Alta':'Queda'}</th><th style={st.th}>Var. %</th></tr></thead>
+                    <tbody>
+                      {b.lista.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={6}>Sem dados para o filtro atual.</td></tr>}
+                      {b.lista.map((p,i)=>(
+                        <tr key={p.chave}>
+                          <td style={{ ...st.td,textAlign:'left' }}>{i+1}</td>
+                          <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.chave}</td>
+                          <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td>
+                          <td style={{ ...st.td,color:b.alta?'#16a34a':'#dc2626',fontWeight:700,whiteSpace:'nowrap' }}>{b.alta?'▲':'▼'} {fmtVal(Math.abs(p.diff))}</td>
+                          <td style={st.td}>{p.v0>0 ? varCell(p.varV ?? -100) : <span style={{ color:'#9aa6bf',fontSize:11 }}>novo</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* CLIENTES QUE MAIS CRESCERAM x MAIS CAÍRAM, COM PRODUTO E MÊS */}
           {doComp && (
             <div style={st.card}>
-              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Top 10 produtos que mais caíram — {aBase} → {aComp}</div>
-              <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:14 }}>Período: <strong>{perLabel}</strong> · selecione um único mês nos filtros acima para ver mês a mês.</div>
-              <table style={{ width:'100%',borderCollapse:'collapse' }}>
-                <thead><tr><th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Produto</th><th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th><th style={st.th}>Queda</th><th style={st.th}>Var. %</th></tr></thead>
-                <tbody>
-                  {produtosQueCairam.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={6}>Sem dados para o filtro atual.</td></tr>}
-                  {produtosQueCairam.map((p,i)=>(
-                    <tr key={i}>
-                      <td style={{ ...st.td,textAlign:'left' }}>{i+1}</td>
-                      <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.chave}</td>
-                      <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td>
-                      <td style={{ ...st.td,color:'#dc2626',fontWeight:700 }}>{fmtVal(p.diff)}</td>
-                      <td style={st.td}>{varCell(p.varV)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Clientes que mais cresceram e que mais caíram — {aBase} → {aComp}</div>
+              <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:14 }}>Período: <strong>{perLabel}</strong> · para cada cliente, o <strong>produto</strong> e o <strong>mês</strong> com a maior diferença no mesmo sentido — a justificativa do movimento.</div>
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:20 }}>
+                {[{ rot:'▲ Maiores altas', cor:'#16a34a', lista:cliCresceram }, { rot:'▼ Maiores quedas', cor:'#dc2626', lista:cliCairam }].map(b => (
+                  <div key={b.rot}>
+                    <div style={{ fontSize:12,fontWeight:800,color:b.cor,marginBottom:8 }}>{b.rot}</div>
+                    <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                      <thead><tr><th style={{ ...st.th,textAlign:'left' }}>Cliente</th><th style={st.th}>Variação</th><th style={{ ...st.th,textAlign:'left' }}>Produto que explica</th><th style={{ ...st.th,textAlign:'left' }}>Mês</th></tr></thead>
+                      <tbody>
+                        {b.lista.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={4}>Nenhum cliente.</td></tr>}
+                        {b.lista.map(linhaMov)}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CURVA DO FATURAMENTO: 20% E 50% */}
+          {doComp && (
+            <div style={st.card}>
+              <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Curva do faturamento — 20% e 50% · {aComp}</div>
+              <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:14 }}>Período: <strong>{perLabel}</strong> · quais e quantos clientes formam cada faixa, a posição que ocupavam em {aBase} (mesmos meses) e a que ocupam agora. <strong>▲ 3</strong> = subiu três lugares.</div>
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:20 }}>
+                {[{ lim:20, lista:curvaFat.f20, frase:'concentram um quinto do faturamento' }, { lim:50, lista:curvaFat.f50, frase:'concentram metade do faturamento' }].map(b => (
+                  <div key={b.lim}>
+                    <div style={{ fontSize:12,color:'#374151',marginBottom:8 }}><b>Faixa de {b.lim}%</b> — <b style={{ color:'#1341c4' }}>{b.lista.length}</b> de {curvaFat.tot} clientes {b.frase}</div>
+                    <div style={{ maxHeight:420,overflowY:'auto' }}>
+                      <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                        <thead><tr><th style={{ ...st.th,textAlign:'left' }}>#</th><th style={{ ...st.th,textAlign:'left' }}>Cliente</th><th style={st.th}>{aComp}</th><th style={st.th}>%</th><th style={st.th}>Posição</th><th style={st.th}>Variação</th><th style={{ ...st.th,textAlign:'left' }}>Por quê</th></tr></thead>
+                        <tbody>
+                          {b.lista.map(c => {
+                            const s = c.posAnt == null ? null : c.posAnt - c.pos
+                            return (
+                              <tr key={c.cliente}>
+                                <td style={{ ...st.td,textAlign:'left' }}>{c.pos}</td>
+                                <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{c.cliente}<div style={{ fontSize:10,color:'#9aa6bf',fontWeight:500 }}>{c.uf}</div></td>
+                                <td style={st.td}>{fmtVal(c.v1)}</td>
+                                <td style={{ ...st.td,color:'#6b7a99' }}>{c.share.toFixed(1).replace('.',',')}%</td>
+                                <td style={{ ...st.td,whiteSpace:'nowrap' }}>
+                                  {s==null ? <span style={{ color:'#1341c4',fontWeight:700 }}>novo</span> : s>0 ? <span style={{ color:'#16a34a',fontWeight:700 }}>▲ {s}</span> : s<0 ? <span style={{ color:'#dc2626',fontWeight:700 }}>▼ {-s}</span> : <span style={{ color:'#9aa6bf' }}>=</span>}
+                                  <div style={{ fontSize:10,color:'#9aa6bf' }}>era {c.posAnt ? c.posAnt+'º' : '—'}</div>
+                                </td>
+                                <td style={{ ...st.td,color:c.diff>=0?'#16a34a':'#dc2626',fontWeight:700,whiteSpace:'nowrap' }}>{c.diff>=0?'▲':'▼'} {fmtVal(Math.abs(c.diff))}</td>
+                                <td style={{ ...st.td,textAlign:'left',fontSize:11 }}>
+                                  {c.produto}<div style={{ fontSize:10,color:'#9aa6bf' }}>{c.produtoDiff>=0?'+':'−'} {fmtVal(Math.abs(c.produtoDiff))} · pico em {MESES[c.mesNum-1]}</div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

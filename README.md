@@ -28,8 +28,10 @@ lib/                   regra de negócio, sem React
   despesas.js            leitura da planilha de DESPESAS + classificação em grupos
   cores.js               paleta (aprovada em teste de daltonismo)
   realce.js              helpers do realce cruzado
+  segmentos.js           produto -> Culturas / Enzimas / Outros (regra do cliente)
+  periodo.js             recortes 'mês fechado' x 'acumulado do ano' e faixas (70%...)
 
-components/            React reaproveitado (Layout, MultiSelect, RealceBanner)
+components/            React reaproveitado (Layout, MultiSelect, RealceBanner, ParticipacaoUf)
 db/                    os SQL que já foram rodados no Supabase — ver db/README.md
 docs/                  o padrão da planilha que o cliente precisa seguir
 Planilhas/             planilhas do cliente (fora do Git) + o MODELO em branco

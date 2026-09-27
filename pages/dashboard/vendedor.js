@@ -3,13 +3,12 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
 import { MultiSelect, MESES_OPC, useOpcoes } from '../../components/MultiSelect'
-import { corVendedor } from '../../lib/cores'
+import { corVendedor, COR_SEGMENTO } from '../../lib/cores'
+import { SEGMENTOS } from '../../lib/segmentos'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
-
-const AZUIS = ['#1341c4','#2a5ae0','#4a78f5','#7399f8','#93aafc']
 
 function fmtVal(v) { if (!v) return '—'; if (v >= 1e6) return 'R$ ' + (v/1e6).toFixed(2).replace('.',',') + ' Mi'; if (v >= 1e3) return 'R$ ' + (v/1e3).toFixed(0) + ' Mil'; return 'R$ ' + Math.round(v) }
 function fmtN(v) { return Number(Math.round(v||0)).toLocaleString('pt-BR') }
@@ -83,6 +82,9 @@ export default function Vendedor({ user }) {
       const s3 = [['Produto','% Valor','QTDE','Valor Total'], ...dados.tabelaProdutos.map(d => [d.produto, d.pct, d.qtde, d.valor])]
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3), 'Produtos')
     }
+    const s4 = [['Segmento','Produto','Valor Total','% do Segmento','QTDE']]
+    porSegmento.forEach(g => g.produtos.forEach(p => s4.push([g.segmento, p.produto, Math.round(p.valor * 100) / 100, Math.round(p.pct * 100) / 100, p.qtde])))
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s4), 'Segmentos')
     XLSX.writeFile(wb, 'Clamalu_Vendedor.xlsx')
   }
 
@@ -123,26 +125,34 @@ export default function Vendedor({ user }) {
     )
   }
 
-  // dados para o ranking de produtos (Chart.js, barras horizontais empilhadas realçado+restante)
-  const prodQtdeHi = aggBy('produto', 'qtde', true)
-  const prodLabelsFull = dados?.topProdQtde?.map(p => p.produto) || []
-  const rankProdData = {
-    labels: dados?.topProdQtde?.map(p => p.produto.length > 18 ? p.produto.slice(0, 18) + '…' : p.produto) || [],
-    datasets: [
-      { label: 'Realçado', stack: 's', borderRadius: 4,
-        data: dados?.topProdQtde?.map(p => Math.min(p.qtde, prodQtdeHi[p.produto] || 0)) || [],
-        backgroundColor: dados?.topProdQtde?.map((p, i) => AZUIS[i % AZUIS.length]) || [] },
-      { label: 'Restante', stack: 's', borderRadius: 4,
-        data: dados?.topProdQtde?.map(p => Math.max(0, p.qtde - (prodQtdeHi[p.produto] || 0))) || [],
-        backgroundColor: dados?.topProdQtde?.map((p, i) => fade(AZUIS[i % AZUIS.length])) || [] },
-    ]
-  }
-  const rankProdOpts = {
-    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-    onClick: (e, els) => { if (els.length) pick('produto', prodLabelsFull[els[0].index]) },
-    plugins: { legend: { display: false } },
-    scales: { x: { stacked: true, grid: { color: '#f0f2f8' } }, y: { stacked: true, grid: { display: false } } }
-  }
+  // ranking por segmento: sai das linhas (e não do servidor) para o realce funcionar nele
+  const porSegmento = (() => {
+    const hiProd = aggBy('produto', 'valor', true)
+    const seg = Object.fromEntries(SEGMENTOS.map(n => [n, { valor: 0, qtde: 0, prod: {} }]))
+    for (const r of linhas) {
+      const g = seg[r.segmento] || seg.Outros
+      g.valor += r.valor_total; g.qtde += r.qtde
+      if (!g.prod[r.produto]) g.prod[r.produto] = { produto: r.produto, valor: 0, qtde: 0 }
+      g.prod[r.produto].valor += r.valor_total; g.prod[r.produto].qtde += r.qtde
+    }
+    const total = SEGMENTOS.reduce((t, n) => t + seg[n].valor, 0)
+    return SEGMENTOS.map(n => {
+      const g = seg[n]
+      const produtos = Object.values(g.prod).sort((x, y) => y.valor - x.valor)
+        .map(p => ({ ...p, hi: hiProd[p.produto] || 0, pct: g.valor > 0 ? p.valor / g.valor * 100 : 0 }))
+      return { segmento: n, valor: g.valor, qtde: g.qtde, produtos,
+        hi: produtos.reduce((t, p) => t + p.hi, 0),
+        pct: total > 0 ? g.valor / total * 100 : 0 }
+    })
+  })()
+  const fmtPct = v => v.toFixed(1).replace('.', ',') + '%'
+
+  // faturamento de cada vendedor aberto por segmento (mesma ordem de porVendedor)
+  const segPorVend = (dados?.porVendedor || []).map(v => {
+    const m = Object.fromEntries(SEGMENTOS.map(n => [n, 0]))
+    for (const r of linhas) if (r.vendedor === v.vendedor) m[r.segmento in m ? r.segmento : 'Outros'] += r.valor_total
+    return { vendedor: v.vendedor, total: v.valor, ...m }
+  })
 
   // doughnut clientes por vendedor — esmaece os que não contribuem para o realce
   const dough = {
@@ -237,7 +247,7 @@ export default function Vendedor({ user }) {
 
       {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#6b7a99' }}>Carregando dados...</div> : (
         <div style={st.page}>
-          {/* BARRAS VENDEDOR */}
+          {/* VENDEDOR: VALOR + CLIENTES */}
           <div style={st.row2}>
             <div style={st.card}>
               <div style={st.cardTitle}>Valor total por vendedor <span style={{ fontWeight: 500, textTransform: 'none', color: '#9aa6bf' }}>· clique para realçar</span></div>
@@ -250,28 +260,6 @@ export default function Vendedor({ user }) {
                     onClick={() => pick('vendedor', v.vendedor)} />
                 ))
               })()}
-            </div>
-            <div style={st.card}>
-              <div style={st.cardTitle}>Quantidade por vendedor</div>
-              {(() => {
-                const max = Math.max(...(dados?.porVendedor?.map(x => x.qtde) || [1])) || 1
-                const hiMap = aggBy('vendedor', 'qtde', true)
-                return dados?.porVendedor?.map((v, i) => (
-                  <Barra key={i} nome={v.vendedor} total={v.qtde} hi={hiMap[v.vendedor] || 0} max={max}
-                    cor={corVendedor(v.vendedor, todosVends)} direita={`${fmtN(v.qtde)} un.`}
-                    onClick={() => pick('vendedor', v.vendedor)} />
-                ))
-              })()}
-            </div>
-          </div>
-
-          {/* RANKING PRODUTO + PIZZA */}
-          <div style={st.row3}>
-            <div style={st.card}>
-              <div style={st.cardTitle}>Ranking de produtos</div>
-              <div style={{ height: 200 }}>
-                <Bar data={rankProdData} options={rankProdOpts} />
-              </div>
             </div>
             <div style={st.card}>
               <div style={st.cardTitle}>Clientes por vendedor</div>
@@ -291,30 +279,97 @@ export default function Vendedor({ user }) {
                 </div>
               </div>
             </div>
-            <div style={st.card}>
-              <div style={st.cardTitle}>Top produtos por valor</div>
-              {(() => {
-                const max = dados?.topProdValor?.[0]?.valor || 1
-                const hiMap = aggBy('produto', 'valor', true)
-                return dados?.topProdValor?.map((p, i) => {
-                  const totalPct = (p.valor / max * 100)
-                  const hiFrac = p.valor > 0 ? Math.min(1, (hiMap[p.produto] || 0) / p.valor) : 0
-                  return (
-                    <div key={i} onClick={() => pick('produto', p.produto)} style={{ marginBottom: 10, cursor: 'pointer', opacity: contribui('produto', p.produto) ? 1 : 0.5 }}>
-                      <div style={{ fontSize: 11, fontWeight: isSel('produto', p.produto) ? 800 : 600, color: '#0f1729', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.produto}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{ flex: 1, height: 6, background: '#f4f6fb', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ width: totalPct + '%', height: '100%', display: 'flex', borderRadius: 3, overflow: 'hidden' }}>
-                            <div style={{ width: (hiFrac * 100) + '%', height: '100%', background: AZUIS[i % AZUIS.length] }} />
-                            <div style={{ flex: 1, height: '100%', background: fade(AZUIS[i % AZUIS.length]) }} />
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7a99', width: 70, textAlign: 'right' }}>{fmtVal(p.valor)}</span>
+          </div>
+
+          {/* FATURAMENTO POR VENDEDOR E SEGMENTO */}
+          <div style={st.card}>
+            <div style={{ ...st.cardTitle, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span>Faturamento por vendedor e segmento</span>
+              {SEGMENTOS.map(n => (
+                <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'none', fontWeight: 600, color: '#374151' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: COR_SEGMENTO[n] }} />{n}
+                </span>
+              ))}
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={st.th}>Vendedor</th>
+                <th style={{ ...st.th, width: '38%' }}>Divisão</th>
+                {SEGMENTOS.map(n => <th key={n} style={{ ...st.th, textAlign: 'right' }}>{n}</th>)}
+                <th style={{ ...st.th, textAlign: 'right' }}>Total</th>
+              </tr></thead>
+              <tbody>
+                {segPorVend.map(v => (
+                  <tr key={v.vendedor} onClick={() => pick('vendedor', v.vendedor)} style={{ cursor: 'pointer', background: isSel('vendedor', v.vendedor) ? '#e8eeff' : '', opacity: contribui('vendedor', v.vendedor) ? 1 : 0.45 }}>
+                    <td style={{ ...st.td, fontWeight: 700 }}>
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: corVendedor(v.vendedor, todosVends), marginRight: 6 }} />{v.vendedor}
+                    </td>
+                    <td style={st.td}>
+                      <div style={{ display: 'flex', height: 16, borderRadius: 4, overflow: 'hidden', gap: 1, background: '#f4f6fb' }}>
+                        {SEGMENTOS.map(n => v[n] > 0 && (
+                          <div key={n} title={`${n}: ${fmtVal(v[n])} · ${fmtPct(v.total > 0 ? v[n] / v.total * 100 : 0)}`}
+                            style={{ flex: v[n], minWidth: 2, background: COR_SEGMENTO[n] }} />
+                        ))}
+                      </div>
+                    </td>
+                    {SEGMENTOS.map(n => (
+                      <td key={n} style={{ ...st.td, textAlign: 'right' }}>
+                        {fmtVal(v[n])}<div style={{ fontSize: 10, color: '#9aa6bf' }}>{fmtPct(v.total > 0 ? v[n] / v.total * 100 : 0)}</div>
+                      </td>
+                    ))}
+                    <td style={{ ...st.td, textAlign: 'right', fontWeight: 700 }}>{fmtVal(v.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* RANKING DE PRODUTOS POR SEGMENTO */}
+          <div style={st.card}>
+            <div style={st.cardTitle}>Ranking de produtos por segmento <span style={{ fontWeight: 500, textTransform: 'none', color: '#9aa6bf' }}>· Culturas = FERM. · Enzimas = CHYMAX EXTRA, M, SUPREME e YIELDMAX · clique para realçar</span></div>
+            <div style={st.row3}>
+              {porSegmento.map(g => {
+                const cor = COR_SEGMENTO[g.segmento]
+                const max = g.produtos[0]?.valor || 1
+                return (
+                  <div key={g.segmento} style={{ minWidth: 0 }}>
+                    <div onClick={() => pick('segmento', g.segmento)}
+                      style={{ cursor: 'pointer', borderRadius: 10, padding: '12px 14px', marginBottom: 12, borderLeft: `4px solid ${cor}`, background: fade(cor, isSel('segmento', g.segmento) ? '33' : '14') }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: '#374151' }}>{g.segmento}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+                        <span style={{ fontSize: 22, fontWeight: 800, color: '#0f1729' }}>{fmtVal(g.valor)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>{fmtPct(g.pct)}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6b7a99', marginTop: 2 }}>
+                        {g.produtos.length} produtos · {fmtN(g.qtde)} un.
+                        {sel && sel.dim !== 'segmento' && g.hi > 0 && <> · <strong style={{ color: '#9a3412' }}>{fmtVal(g.hi)} de {sel.value}</strong></>}
                       </div>
                     </div>
-                  )
-                })
-              })()}
+                    <div style={{ maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
+                      {g.produtos.length === 0 && <div style={{ fontSize: 12, color: '#9aa6bf' }}>Nenhuma venda no período.</div>}
+                      {g.produtos.map((p, i) => {
+                        const hiFrac = p.valor > 0 ? Math.min(1, p.hi / p.valor) : 0
+                        return (
+                          <div key={p.produto} onClick={() => pick('produto', p.produto)} style={{ marginBottom: 9, cursor: 'pointer', opacity: contribui('produto', p.produto) ? 1 : 0.45 }}>
+                            <div style={{ display: 'flex', gap: 6, fontSize: 11, marginBottom: 3 }}>
+                              <span style={{ color: '#9aa6bf', width: 18, textAlign: 'right' }}>{i + 1}</span>
+                              <span style={{ flex: 1, fontWeight: isSel('produto', p.produto) ? 800 : 600, color: '#0f1729', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.produto}</span>
+                              <span style={{ color: '#6b7a99' }}>{fmtPct(p.pct)}</span>
+                              <span style={{ fontWeight: 700, width: 72, textAlign: 'right' }}>{fmtVal(p.valor)}</span>
+                            </div>
+                            <div style={{ marginLeft: 24, height: 6, background: '#f4f6fb', borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ width: (p.valor / max * 100) + '%', height: '100%', display: 'flex' }}>
+                                <div style={{ width: (sel ? hiFrac * 100 : 100) + '%', height: '100%', background: cor }} />
+                                <div style={{ flex: 1, height: '100%', background: fade(cor) }} />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 

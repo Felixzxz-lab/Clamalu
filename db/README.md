@@ -40,6 +40,8 @@ antigo, então repetir não faz efeito, mas também não tem por quê.
 | arquivo | o que corrige |
 |---|---|
 | `2026-08_carga_julho.sql` | erros de digitação da planilha de vendas de julho/2026: NF com data em agosto, NF com data `30/01/00` criando o ano 2000 na base, e duas NFs digitadas trocadas |
+| `2026-09_duplicatas_julho.sql` | apaga 47 linhas de julho/2026 importadas duas vezes (+R$ 350 mil), entre elas a do ano 2000 |
+| `2026-09_wendel_para_maicon.sql` | reatribui o histórico do WENDEL ao MAICON (assumiu a carteira) e ajusta `vendedores_ocultos`. A importação já converte o nome antigo (`lib/planilha.js`) |
 
 ## RLS
 

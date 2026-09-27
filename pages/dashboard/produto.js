@@ -3,14 +3,16 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { parse } from 'cookie'
 import { verifyToken } from '../../lib/auth'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js'
 import { fade, aggBy, contribui, tabelaAgrupada } from '../../lib/realce'
 import { RealceBanner } from '../../components/RealceBanner'
 import { MultiSelect, MESES_OPC, useOpcoes } from '../../components/MultiSelect'
+import { SEGMENTOS, segmentoDe } from '../../lib/segmentos'
+import { recortes, somaPor } from '../../lib/periodo'
+import { ParticipacaoUf, COR_UFS } from '../../components/ParticipacaoUf'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
-const COR_UFS = { GO:'#1341c4',MT:'#16a34a',PA:'#dc2626',TO:'#ea8c00',RO:'#7c3aed',DF:'#0891b2' }
 const AZUIS = ['#1341c4','#2a5ae0','#4a78f5','#7399f8','#93aafc','#b5c5fd']
 function fmtVal(v){if(!v)return'—';if(v>=1e6)return'R$ '+(v/1e6).toFixed(2).replace('.',',')+' Mi';if(v>=1e3)return'R$ '+(v/1e3).toFixed(0)+' Mil';return'R$ '+Math.round(v)}
 function fmtN(v){return Number(Math.round(v||0)).toLocaleString('pt-BR')}
@@ -22,13 +24,11 @@ export default function Produto({ user }) {
   const [fAno, setFAno] = useState([])
   const [fMes, setFMes] = useState([])
   const [fVend, setFVend] = useState([])
-  const [prodAtivo, setProdAtivo] = useState(null)
-  const [expandido, setExpandido] = useState(false)
+  const [fSeg, setFSeg] = useState('Todos') // filtro do bloco de região
   const [sel, setSel] = useState(null)
   const opcoes = useOpcoes()
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
-  useEffect(() => { if (dados?.prodUf?.length) setProdAtivo(dados.prodUf[0].produto) }, [dados])
 
   async function carregar() {
     setLoading(true)
@@ -41,14 +41,12 @@ export default function Produto({ user }) {
     setDados(await r.json())
     setSel(null)
     setLoading(false)
-    setExpandido(false)
   }
 
   const linhas = dados?.linhas || []
   function pick(dim, value) {
     if (!value) return
     setSel(s => (s && s.dim === dim && s.value === value) ? null : { dim, value })
-    if (dim === 'produto') setProdAtivo(value)
   }
   const isSel = (dim, value) => sel && sel.dim === dim && sel.value === value
 
@@ -81,9 +79,10 @@ export default function Produto({ user }) {
     td: { padding:'8px 8px',borderBottom:'1px solid #f3f4f6',fontSize:12,color:'#0f1729',verticalAlign:'middle' },
   }
 
-  const prodUfAtivo = dados?.prodUf?.find(p => p.produto === prodAtivo)
-  const principais = prodUfAtivo?.ufs?.slice(0,5) || []
-  const extras = prodUfAtivo?.ufs?.slice(5) || []
+  // % por região: todos os produtos, cada um numa barra 100% dividida por UF
+  const ufsOrdem = (dados?.ufTotal || []).map(u => u.uf)
+  const prodRegiao = (dados?.prodUf || []).filter(p => fSeg === 'Todos' || segmentoDe(p.produto) === fSeg)
+  const pctFmt = v => String(v).replace('.', ',') + '%'
 
   // gráficos de barras (top5) com realce two-tone
   function barTop(lista, measure) {
@@ -108,15 +107,9 @@ export default function Produto({ user }) {
   const bV = barTop(dados?.top5Valor || [], 'valor')
   const bQ = barTop(dados?.top5Qtde || [], 'qtde')
 
-  // doughnut UF com esmaecimento dos que não contribuem
-  const dough = {
-    labels: dados?.ufTotal?.map(u=>u.uf) || [],
-    datasets: [{ data: dados?.ufTotal?.map(u=>u.pct) || [],
-      backgroundColor: dados?.ufTotal?.map(u => contribui(linhas,'uf',u.uf,sel) ? (COR_UFS[u.uf]||'#9ca3af') : fade(COR_UFS[u.uf]||'#9ca3af')) || [],
-      borderWidth:3, borderColor:'#fff' }]
-  }
-  const doughOpts = { cutout:'55%', responsive:true, plugins:{legend:{display:false}},
-    onClick:(e,els)=>{ if(els.length) pick('uf', dados.ufTotal[els[0].index].uf) } }
+  // participação por estado: mês fechado e acumulado do ano (lib/periodo.js)
+  const per = recortes(linhas)
+  const ufMes = somaPor(per.mes, 'uf'), ufAcum = somaPor(per.acum, 'uf')
 
   // ranking de produtos: filtra quando há realce
   const tabProd = sel
@@ -175,78 +168,51 @@ export default function Produto({ user }) {
             </div>
           </div>
 
-          {/* REGIÃO */}
+          {/* REGIÃO: todos os produtos */}
           <div style={st.card}>
-            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14 }}>
-              <span style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99' }}>% de vendas por região (UF) — por produto</span>
-              <span style={{ fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:6,background:'#e8eeff',color:'#1341c4' }}>Selecione um produto</span>
-            </div>
-            <div style={{ display:'flex',flexWrap:'wrap',gap:6,marginBottom:14 }}>
-              {dados?.prodUf?.map(p=>(
-                <button key={p.produto} onClick={()=>{setProdAtivo(p.produto);setExpandido(false)}} style={{ padding:'5px 12px',borderRadius:20,border:`1.5px solid ${prodAtivo===p.produto?'#1341c4':'#e2e6f0'}`,background:prodAtivo===p.produto?'#1341c4':'white',color:prodAtivo===p.produto?'white':'#6b7a99',fontSize:11,fontWeight:600,cursor:'pointer' }}>
-                  {p.produto}
-                </button>
-              ))}
-            </div>
-            {prodUfAtivo && (
-              <>
-                <div style={{ display:'flex',height:24,borderRadius:6,overflow:'hidden',gap:1,marginBottom:12 }}>
-                  {prodUfAtivo.ufs.map((u,i)=>(
-                    <div key={i} title={`${u.uf}: ${u.pct}% · ${fmtVal(u.valor)}`} style={{ flex:u.pct,height:'100%',background:COR_UFS[u.uf]||'#9ca3af',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'white',minWidth:u.pct>=8?'auto':0 }}>
-                      {u.pct>=8?u.uf:''}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:extras.length>0?8:0 }}>
-                  {principais.map((u,i)=>(
-                    <div key={i} style={{ background:'#f7f9ff',borderRadius:8,padding:'10px 12px',borderLeft:`3px solid ${COR_UFS[u.uf]||'#9ca3af'}` }}>
-                      <div style={{ fontSize:11,fontWeight:700,color:COR_UFS[u.uf]||'#9ca3af' }}>{u.uf}</div>
-                      <div style={{ fontSize:22,fontWeight:800,color:'#0f1729',margin:'2px 0' }}>{u.pct}%</div>
-                      <div style={{ fontSize:10,color:'#6b7a99' }}>{fmtVal(u.valor)}</div>
-                    </div>
-                  ))}
-                </div>
-                {extras.length>0&&(
-                  <>
-                    <button onClick={()=>setExpandido(!expandido)} style={{ background:'none',border:'1.5px solid #e2e6f0',borderRadius:8,padding:'6px 14px',fontSize:11,fontWeight:600,color:'#6b7a99',cursor:'pointer',marginBottom:8 }}>
-                      {expandido?'▲ Recolher':`${extras.length} estado(s) a mais — clique para ver ▼`}
-                    </button>
-                    {expandido&&(
-                      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8 }}>
-                        {extras.map((u,i)=>(
-                          <div key={i} style={{ background:'#f7f9ff',borderRadius:8,padding:'10px 12px',borderLeft:`3px solid ${COR_UFS[u.uf]||'#9ca3af'}` }}>
-                            <div style={{ fontSize:11,fontWeight:700,color:COR_UFS[u.uf]||'#9ca3af' }}>{u.uf}</div>
-                            <div style={{ fontSize:22,fontWeight:800,color:'#0f1729',margin:'2px 0' }}>{u.pct}%</div>
-                            <div style={{ fontSize:10,color:'#6b7a99' }}>{fmtVal(u.valor)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* PIZZA UF + TABELA */}
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 2fr',gap:16 }}>
-            <div style={st.card}>
-              <div style={st.cardTitle}>Participação por estado <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· clique p/ realçar</span></div>
-              <div style={{ display:'flex',alignItems:'center',gap:16 }}>
-                <div style={{ width:140,height:140 }}>
-                  <Doughnut data={dough} options={doughOpts} />
-                </div>
-                <div style={{ flex:1 }}>
-                  {dados?.ufTotal?.map((u,i)=>(
-                    <div key={i} onClick={()=>pick('uf',u.uf)} style={{ display:'flex',alignItems:'center',gap:8,marginBottom:8,cursor:'pointer',opacity:contribui(linhas,'uf',u.uf,sel)?1:0.4 }}>
-                      <div style={{ width:10,height:10,borderRadius:2,background:COR_UFS[u.uf]||'#9ca3af' }}/>
-                      <span style={{ fontSize:12,fontWeight:isSel('uf',u.uf)?800:600,flex:1 }}>{u.uf}</span>
-                      <span style={{ fontSize:12,fontWeight:700,color:'#1341c4' }}>{u.pct}%</span>
-                    </div>
-                  ))}
-                </div>
+            <div style={{ display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:12 }}>
+              <span style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99' }}>% de vendas por região (UF) — todos os produtos</span>
+              <div style={{ display:'flex',gap:4,marginLeft:'auto' }}>
+                {['Todos', ...SEGMENTOS].map(s => (
+                  <button key={s} onClick={()=>setFSeg(s)} style={{ padding:'4px 12px',borderRadius:20,border:`1.5px solid ${fSeg===s?'#1341c4':'#e2e6f0'}`,background:fSeg===s?'#1341c4':'white',color:fSeg===s?'white':'#6b7a99',fontSize:11,fontWeight:600,cursor:'pointer' }}>{s}</button>
+                ))}
               </div>
             </div>
+            <div style={{ display:'flex',gap:14,flexWrap:'wrap',marginBottom:12 }}>
+              {ufsOrdem.map(uf => (
+                <span key={uf} style={{ display:'inline-flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:'#374151' }}>
+                  <span style={{ width:10,height:10,borderRadius:2,background:COR_UFS[uf]||'#9ca3af' }} />{uf}
+                </span>
+              ))}
+              <span style={{ fontSize:11,color:'#9aa6bf' }}>· passe o mouse na barra para ver % e valor · clique no produto para realçar</span>
+            </div>
+            <div style={{ maxHeight:460,overflowY:'auto',paddingRight:4 }}>
+              {prodRegiao.length===0 && <div style={{ fontSize:12,color:'#9aa6bf' }}>Nenhum produto deste segmento no período.</div>}
+              {prodRegiao.map((p,i)=>(
+                <div key={p.produto} onClick={()=>pick('produto',p.produto)} style={{ display:'flex',alignItems:'center',gap:10,marginBottom:6,cursor:'pointer',opacity:contribui(linhas,'produto',p.produto,sel)?1:0.4 }}>
+                  <span style={{ width:20,fontSize:10,color:'#9aa6bf',textAlign:'right' }}>{i+1}</span>
+                  <span title={p.produto} style={{ width:190,fontSize:11,fontWeight:isSel('produto',p.produto)?800:600,color:'#0f1729',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{p.produto}</span>
+                  <div style={{ flex:1,display:'flex',height:20,borderRadius:5,overflow:'hidden',gap:1,background:'#f4f6fb' }}>
+                    {[...p.ufs].sort((a,b)=>ufsOrdem.indexOf(a.uf)-ufsOrdem.indexOf(b.uf)).map(u=>(
+                      <div key={u.uf} title={`${p.produto} · ${u.uf}: ${pctFmt(u.pct)} · ${fmtVal(u.valor)}`} style={{ flex:u.pct,minWidth:2,height:'100%',background:COR_UFS[u.uf]||'#9ca3af',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'white',overflow:'hidden',whiteSpace:'nowrap' }}>
+                        {u.pct>=12?`${u.uf} ${Math.round(u.pct)}%`:''}
+                      </div>
+                    ))}
+                  </div>
+                  <span style={{ width:78,fontSize:11,fontWeight:700,textAlign:'right',color:'#374151' }}>{fmtVal(p.total)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PARTICIPAÇÃO POR ESTADO: MÊS E ACUMULADO */}
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
+            <ParticipacaoUf titulo='Participação de cada estado no faturamento' sub={per.rotuloMes + ' — mês fechado'} lista={ufMes} linhas={per.mes} sel={sel} onPick={pick} />
+            <ParticipacaoUf titulo='Participação de cada estado no faturamento' sub={per.rotuloAcum + ' — acumulado do ano'} lista={ufAcum} linhas={per.acum} sel={sel} onPick={pick} />
+          </div>
+
+          {/* RANKING COMPLETO */}
+          <div>
             <div style={st.card}>
               <div style={st.cardTitle}>Ranking completo de produtos {sel && <span style={{ fontWeight:500,textTransform:'none',color:'#ea8c00' }}>· filtrado por {sel.value}</span>}</div>
               <div style={{ maxHeight:280,overflowY:'auto' }}>

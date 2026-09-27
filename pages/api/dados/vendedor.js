@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../lib/supabase'
 import { requireAuth, aplicarFiltroVendedor } from '../../../lib/auth'
 import { selectAll } from '../../../lib/db'
+import { segmentoDe } from '../../../lib/segmentos'
 
 export default requireAuth(async function handler(req, res) {
   if (!req.user.paginas?.includes('vendedor')) return res.status(403).json({ error: 'Sem acesso' })
@@ -41,17 +42,13 @@ export default requireAuth(async function handler(req, res) {
     qtde: d.qtde, clientes: d.clientes.size
   })).sort((a, b) => b.valor - a.valor)
 
-  // Top 5 produtos por qtde
+  // Por produto (tabela e ranking por segmento)
   const prodMap = {}
   data.forEach(r => {
     if (!prodMap[r.produto]) prodMap[r.produto] = { qtde: 0, valor: 0 }
     prodMap[r.produto].qtde += r.qtde
     prodMap[r.produto].valor += r.valor_total
   })
-  const topProdQtde = Object.entries(prodMap).map(([p, d]) => ({ produto: p, ...d }))
-    .sort((a, b) => b.qtde - a.qtde).slice(0, 5)
-  const topProdValor = Object.entries(prodMap).map(([p, d]) => ({ produto: p, ...d }))
-    .sort((a, b) => b.valor - a.valor).slice(0, 5)
 
   // Tabela clientes
   const cliMap = {}
@@ -76,11 +73,11 @@ export default requireAuth(async function handler(req, res) {
   // linhas detalhadas para o realce cruzado no front (não filtra, só permite recalcular fatias)
   const linhas = data.map(r => ({
     vendedor: r.vendedor, cliente: r.cliente, uf: r.uf,
-    produto: r.produto, qtde: r.qtde, valor_total: r.valor_total
+    produto: r.produto, segmento: segmentoDe(r.produto), qtde: r.qtde, valor_total: r.valor_total
   }))
 
   return res.status(200).json({
     kpis: { qtde: totalQtde, valor: Math.round(totalValor * 100) / 100, clientes: totalClientes },
-    porVendedor, topProdQtde, topProdValor, tabelaClientes, tabelaProdutos, linhas
+    porVendedor, tabelaClientes, tabelaProdutos, linhas
   })
 })

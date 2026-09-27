@@ -68,11 +68,11 @@ export default requireAuth(async function handler(req, res) {
     qtde: data.filter(r => r.produto === p.produto).reduce((s, r) => s + r.qtde, 0)
   }))
 
-  const linhas = data.map(r => ({ produto: r.produto, uf: r.uf, vendedor: r.vendedor, qtde: r.qtde, valor_total: r.valor_total }))
+  const linhas = data.map(r => ({ produto: r.produto, uf: r.uf, vendedor: r.vendedor, ano: r.ano, mes: r.mes, qtde: r.qtde, valor_total: r.valor_total }))
 
   return res.status(200).json({
     kpis: { qtde: totalQtde, valor: Math.round(totalValor * 100) / 100 },
-    prodUf: prodUf.slice(0, 10),
+    prodUf, // todos os produtos (pedido do cliente em 21/09/2026; antes era top 10)
     ufTotal,
     tabelaProdutos: prodRank,
     top5Valor: prodRank.slice(0, 5),
