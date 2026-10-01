@@ -290,31 +290,73 @@ const SLIDES = [
       </div>
     ) },
 
-  { id: 'mercado', nome: 'Mercado mapeado', publico: ['diretoria'], kicker: 'Mercado', so: d => d.mercado?.length > 0,
-    titulo: d => d.mercado.map(m => `${m.nome.split(' ')[0]}: ${pct(m.share.GERAL.pctLinhas)} dos laticínios`).join(' · ') + ' já são Clamalu',
-    render: d => (
-      <div style={{ display: 'flex', gap: 30 }}>
-        {d.mercado.map(m => {
-          const ufs = Object.keys(m.share).filter(k => k !== 'GERAL').sort()
-          return (
-            <div key={m.categoria} style={{ flex: 1, background: '#f7f9fd', borderRadius: 16, padding: '22px 26px' }}>
-              <div style={{ fontSize: 18, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: '#3d4864' }}>{m.nome}</div>
-              <div style={{ display: 'flex', gap: 30, margin: '12px 0 18px' }}>
-                <div><div style={{ fontSize: 44, fontWeight: 800, color: AZUL2 }}>{pct(m.share.GERAL.pctLinhas)}</div><div style={{ fontSize: 14, color: CINZA }}>dos {m.laticinios} laticínios mapeados</div></div>
-                <div><div style={{ fontSize: 44, fontWeight: 800, color: '#5b7be8' }}>{pct(m.share.GERAL.pctLt)}</div><div style={{ fontSize: 14, color: CINZA }}>do volume de leite</div></div>
+  { id: 'presenca', nome: 'Presença Clamalu por estado', publico: ['equipe', 'diretoria'], kicker: 'Mercado mapeado', so: d => d.mercado?.length > 0,
+    titulo: d => 'Presença da Clamalu: ' + d.mercado.map((m, i) => `${pct(m.share.GERAL.pctLinhas)}${i ? '' : ' das produções'} em ${m.curto}`).join(' e '),
+    render: d => {
+      const ufs = [...new Set(d.mercado.flatMap(m => Object.keys(m.share).filter(k => k !== 'GERAL')))].sort()
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ display: 'flex', gap: 30, paddingLeft: 110, marginBottom: 6 }}>
+            {d.mercado.map(m => <div key={m.categoria} style={{ flex: 1, fontSize: 16, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: '#3d4864' }}>{m.nome}</div>)}
+          </div>
+          {[...ufs, 'GERAL'].map(u => (
+            <div key={u} style={{ display: 'flex', alignItems: 'center', gap: 30, padding: '18px 0', borderTop: `${u === 'GERAL' ? 2 : 1}px solid ${u === 'GERAL' ? '#c9d3ec' : '#eef1f7'}` }}>
+              <div style={{ width: 80, fontSize: 22, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+                {u !== 'GERAL' && <i style={{ width: 14, height: 14, borderRadius: 3, background: cu(u), display: 'inline-block' }} />}{u === 'GERAL' ? 'Geral' : u}
               </div>
-              {ufs.map(u => (
-                <div key={u} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 15 }}>
-                  <b style={{ width: 36 }}>{u}</b>
-                  <div style={{ flex: 1, height: 16, background: '#e6ebf5', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: m.share[u].pctLinhas + '%', height: '100%', background: cu(u) }} /></div>
-                  <span style={{ width: 64, textAlign: 'right', fontWeight: 700 }}>{pct(m.share[u].pctLinhas)}</span>
-                </div>
-              ))}
+              {d.mercado.map(m => { const s = m.share[u]; return (
+                <div key={m.categoria} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 16 }}>
+                  {s ? <>
+                    <div style={{ width: 118, fontSize: 38, fontWeight: 800, letterSpacing: -1, color: u === 'GERAL' ? AZUL : '#0f1729' }}>{pct(s.pctLinhas)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ height: 14, background: '#eef1f7', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: s.pctLinhas + '%', height: '100%', background: u === 'GERAL' ? AZUL : cu(u) }} /></div>
+                      <div style={{ fontSize: 14, color: CINZA, marginTop: 5 }}>{s.linhasCla} de {s.linhas} produções · <b style={{ color: '#3d4864' }}>{pct(s.pctLt)}</b> do leite</div>
+                    </div>
+                  </> : <span style={{ color: CINZA }}>sem dados</span>}
+                </div>) })}
             </div>
-          )
-        })}
-      </div>
-    ) },
+          ))}
+          <div style={{ fontSize: 14, color: CINZA, marginTop: 'auto' }}>Produção = um laticínio fazendo um tipo de queijo (quem faz Mussarela e Prato conta 2). O % é a parte dessas produções que usa o insumo da Clamalu, sobre todo o mercado levantado — clientes e não clientes.</div>
+        </div>
+      )
+    } },
+
+  ...['cultura', 'enzima'].map(categoria => ({
+    id: 'mercado-' + categoria, nome: categoria === 'cultura' ? 'Mercado de Culturas' : 'Mercado de Enzimas', publico: ['equipe', 'diretoria'], kicker: 'Mercado mapeado',
+    so: d => d.mercado?.some(m => m.categoria === categoria),
+    titulo: d => { const m = d.mercado.find(x => x.categoria === categoria), g = m.share.GERAL; return `${m.curto}: a Clamalu fornece ${m.insumo === 'cultura' ? 'a cultura' : 'o coagulante'} de ${g.linhasCla} das ${g.linhas} produções mapeadas` },
+    render: d => {
+      const m = d.mercado.find(x => x.categoria === categoria), g = m.share.GERAL
+      const Ranking = ({ titulo, itens }) => {
+        const max = Math.max(...itens.map(i => i.n), 1)
+        return (
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: CINZA, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>{titulo}</div>
+            {itens.map(i => { const cla = i.cat === 'Clamalu', fraco = /^(Sem|Não informado)/.test(i.cat); return (
+              <div key={i.cat} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 9, fontSize: 16 }}>
+                <span style={{ width: 190, fontWeight: cla ? 800 : 600, color: fraco ? CINZA : '#0f1729' }}>{cortar(i.cat, 22)}</span>
+                <div style={{ flex: 1, height: 18, background: '#eef1f7', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: i.n / max * 100 + '%', height: '100%', background: cla ? AZUL2 : fraco ? '#dfe4ef' : '#a9b6d6' }} /></div>
+                <span style={{ width: 40, textAlign: 'right', fontWeight: 800 }}>{i.n}</span>
+                <span style={{ width: 58, textAlign: 'right', color: CINZA }}>{pct(i.n / g.linhas * 100)}</span>
+              </div>) })}
+          </div>
+        )
+      }
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+          <div style={{ display: 'flex', gap: 18 }}>
+            <Kpi rotulo="Laticínios" valor={m.cli.GERAL.empresas} detalhe="mapeados" />
+            <Kpi rotulo="Produções de queijo" valor={g.linhas} detalhe="laticínio × tipo de queijo" />
+            <Kpi rotulo="Usam Clamalu" valor={pct(g.pctLinhas)} detalhe={`${g.linhasCla} produções com ${m.insumo} Clamalu`} cor={AZUL2} />
+            <Kpi rotulo="Do leite é Clamalu" valor={pct(g.pctLt)} detalhe="do volume processado" cor="#5b7be8" />
+          </div>
+          <div style={{ display: 'flex', gap: 50 }}>
+            <Ranking titulo="Quem fornece" itens={m.distribuidores} />
+            <Ranking titulo={categoria === 'enzima' ? 'Marcas mais usadas' : 'Culturas mais usadas'} itens={m.usados} />
+          </div>
+        </div>
+      )
+    } })),
 
   { id: 'pauta', nome: 'Pontos para discussão', publico: ['equipe', 'diretoria'], kicker: 'Para discutir', titulo: () => 'Pontos para discussão',
     render: (d, ctx) => (
@@ -344,6 +386,7 @@ function destaques(d) {
   if (segs[0]) out.push(`${segs[0].segmento} foi o segmento que mais mudou: ${sinal(segs[0].acum - segs[0].acumAnt)} ${brl(Math.abs(segs[0].acum - segs[0].acumAnt))} no ano.`)
   const q = d.clientes.cairam[0]
   if (q) out.push(`Maior queda de cliente: ${cortar(q.cliente, 32)} (${sinal(q.diff)} ${brl(Math.abs(q.diff))}), principalmente em ${cortar(q.produto, 22)}.`)
+  if (d.mercado?.length) out.push(`Presença no mercado mapeado: ${d.mercado.map(m => `${pct(m.share.GERAL.pctLinhas)} das produções em ${m.curto}`).join(' e ')}.`)
   if (d.radar.pares) out.push(`${d.radar.clientes} clientes deixaram de comprar algum produto do ano passado — ${brl(d.radar.total)} para recuperar.`)
   return out
 }
@@ -477,7 +520,7 @@ export default function Apresentacao({ user }) {
             )
           })}
           <div style={{ fontSize: 12, color: CINZA, marginTop: 14, lineHeight: 1.5 }}>
-            <b>Equipe</b> traz os detalhes do dia a dia (produtos, clientes, oportunidades). <b>Diretoria</b> fica no resumo, segmentos, vendedores, estados e mercado.<br /><br />
+            <b>Equipe</b> traz os detalhes do dia a dia (produtos, clientes, oportunidades). <b>Diretoria</b> fica no resumo, segmentos, vendedores e estados. Os slides de mercado (Culturas, Enzimas e presença por estado) entram nos dois.<br /><br />
             Apresentando: <b>→</b> ou clique avança, <b>←</b> volta, <b>Esc</b> sai. A pauta do último slide é editável aqui e fica salva neste computador.
           </div>
         </div>

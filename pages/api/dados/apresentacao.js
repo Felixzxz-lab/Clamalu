@@ -2,7 +2,7 @@ import { supabaseAdmin } from '../../../lib/supabase'
 import { requireAuth, aplicarFiltroVendedor } from '../../../lib/auth'
 import { selectAll } from '../../../lib/db'
 import { montarApresentacao, mesesDisponiveis } from '../../../lib/apresentacao'
-import { sharePorUf, clientesPorUf } from '../../../lib/mapeamento'
+import { sharePorUf, clientesPorUf, tabelaUf, rotulo } from '../../../lib/mapeamento'
 
 // Dados da apresentação semanal. ?ano=&mes= escolhe o mês de referência;
 // sem eles, usa o último mês com venda. Lê só os 2 anos necessários (o de
@@ -28,7 +28,7 @@ export default requireAuth(async function handler(req, res) {
         req.user, [])),
       Promise.all([['cultura', 'culturas'], ['enzima', 'enzimas']].map(([categoria, pagina]) =>
         req.user.paginas?.includes(pagina)
-          ? selectAll(() => db.from('mapeamento').select('empresa,uf,tipo_queijo,leite_litros_ano,queijo_kg_ano,distribuidor').eq('categoria', categoria))
+          ? selectAll(() => db.from('mapeamento').select('empresa,uf,tipo_queijo,leite_litros_ano,queijo_kg_ano,apresentacao,marca,distribuidor,sem_produto_comercial').eq('categoria', categoria))
           : [])),
     ])
 
@@ -43,8 +43,13 @@ export default requireAuth(async function handler(req, res) {
       const m = mercadoBruto[i]
       if (!m.length) continue
       const l = m.map(r => ({ ...r, leite_litros_ano: Number(r.leite_litros_ano) || 0, queijo_kg_ano: Number(r.queijo_kg_ano) || 0 }))
-      const share = sharePorUf(l), cli = clientesPorUf(l)
-      dados.mercado.push({ categoria, nome, laticinios: cli.GERAL.empresas, share })
+      // top 6 de cada ranking, contando produções (laticínio × tipo de queijo)
+      const top = fn => tabelaUf(l, fn).cats.slice(0, 6).map(c => ({ cat: c.cat, n: c.GERAL }))
+      dados.mercado.push({
+        categoria, nome, curto: nome.split(' ')[0], insumo: categoria === 'cultura' ? 'cultura' : 'coagulante', share: sharePorUf(l), cli: clientesPorUf(l),
+        distribuidores: top(rotulo.distribuidor),
+        usados: top(categoria === 'enzima' ? rotulo.marca : rotulo.apresentacao),
+      })
     }
 
     return res.status(200).json({ meses, dados })

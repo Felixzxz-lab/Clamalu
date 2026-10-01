@@ -24,6 +24,7 @@ const st = {
   kpi: { textAlign: 'center', padding: '8px 16px', borderRight: '1px solid rgba(255,255,255,0.12)' },
   kpiVal: { fontSize: 32, fontWeight: 800, color: 'white', letterSpacing: -1, lineHeight: 1 },
   kpiLbl: { fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 5 },
+  kpiSub: { fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
   page: { padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 16 },
   card: { background: 'white', borderRadius: 12, boxShadow: '0 2px 8px rgba(19,65,196,0.08)', border: '1px solid #e2e6f0', padding: '18px 20px' },
   cardTitle: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: '#6b7a99' },
@@ -107,6 +108,7 @@ export default function Mapeamento({ user, categoria }) {
   const router = useRouter()
   const pagina = categoria === 'cultura' ? 'culturas' : 'enzimas'
   const nome = categoria === 'cultura' ? 'Culturas' : 'Enzimas e Coagulantes'
+  const insumo = categoria === 'cultura' ? 'cultura' : 'coagulante'
   const [todas, setTodas] = useState(null)
   const [carregadoEm, setCarregadoEm] = useState(null)
   const [erro, setErro] = useState(null)
@@ -152,9 +154,9 @@ export default function Mapeamento({ user, categoria }) {
     XLSX.utils.book_append_sheet(wb, aba('Distribuidor', tabelaUf(linhas, rotulo.distribuidor)), 'Distribuidor')
     if (categoria === 'enzima') XLSX.utils.book_append_sheet(wb, aba('Marca', tabelaUf(linhas, rotulo.marca)), 'Marca')
     else XLSX.utils.book_append_sheet(wb, aba('Cultura', tabelaUf(linhas, rotulo.apresentacao)), 'Cultura')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['UF', 'Laticínios', 'Linhas', 'Leite L/ano', 'Queijo kg/ano', 'Linhas Clamalu', '% linhas Clamalu', '% leite Clamalu'],
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['UF', 'Laticínios', 'Produções', 'Leite L/ano', 'Queijo kg/ano', 'Produções Clamalu', '% produções Clamalu', '% leite Clamalu'],
       ...[...ufs, 'GERAL'].map(u => [u, cli[u]?.empresas || 0, cli[u]?.linhas || 0, Math.round(vol[u]?.leite || 0), Math.round(vol[u]?.kg || 0), share[u]?.linhasCla || 0, Math.round((share[u]?.pctLinhas || 0) * 10) / 10, Math.round((share[u]?.pctLt || 0) * 10) / 10])]), 'Por UF')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[rotRend, 'Linhas', 'Leite L/ano', 'Queijo kg/ano', 'L por kg'], ...rendPor.map(o => [o.cat, o.n, Math.round(o.leite), Math.round(o.kg), Math.round(o.rend * 100) / 100])]), 'Rendimento')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[rotRend, 'Produções', 'Leite L/ano', 'Queijo kg/ano', 'L por kg'], ...rendPor.map(o => [o.cat, o.n, Math.round(o.leite), Math.round(o.kg), Math.round(o.rend * 100) / 100])]), 'Rendimento')
     XLSX.writeFile(wb, `Clamalu_${nome.split(' ')[0]}.xlsx`)
   }
 
@@ -192,8 +194,8 @@ export default function Mapeamento({ user, categoria }) {
 
       <div style={st.kpiBar}>
         <div style={st.kpi}><div style={st.kpiVal}>{todas ? mil(cli.GERAL?.empresas) : '...'}</div><div style={st.kpiLbl}>Laticínios mapeados</div></div>
-        <div style={st.kpi}><div style={st.kpiVal}>{todas ? mil(cli.GERAL?.linhas) : '...'}</div><div style={st.kpiLbl}>Linhas (empresa × queijo)</div></div>
-        <div style={st.kpi}><div style={st.kpiVal}>{todas ? pct(g.pctLinhas) : '...'}</div><div style={st.kpiLbl}>São clientes Clamalu</div></div>
+        <div style={st.kpi}><div style={st.kpiVal}>{todas ? mil(cli.GERAL?.linhas) : '...'}</div><div style={st.kpiLbl}>Produções de queijo</div><div style={st.kpiSub}>cada laticínio × cada tipo de queijo</div></div>
+        <div style={st.kpi}><div style={st.kpiVal}>{todas ? pct(g.pctLinhas) : '...'}</div><div style={st.kpiLbl}>Usam {insumo} Clamalu</div><div style={st.kpiSub}>% das produções</div></div>
         <div style={{ ...st.kpi, borderRight: 'none' }}><div style={st.kpiVal}>{todas ? pct(g.pctLt) : '...'}</div><div style={st.kpiLbl}>Do volume de leite é Clamalu</div></div>
       </div>
 
@@ -205,15 +207,15 @@ export default function Mapeamento({ user, categoria }) {
           {/* PARTICIPAÇÃO DA CLAMALU */}
           <div style={st.card}>
             <div style={st.cardTitle}>Participação da Clamalu no mercado mapeado</div>
-            <div style={st.sub}>De todos os laticínios levantados, clientes e não clientes, qual fatia já compra {nome.toLowerCase()} da Clamalu: em número de linhas e em volume de leite.</div>
+            <div style={st.sub}>De todos os laticínios levantados, clientes e não clientes, qual fatia já compra {nome.toLowerCase()} da Clamalu: em número de produções e em volume de leite.</div>
             <div style={st.g2}>
               <div>
                 {ufs.map(u => (
                   <div key={u} style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}><ChipUf uf={u} /><span style={muted}>{share[u].linhasCla} de {share[u].linhas} linhas</span></div>
-                    {[['Linhas', share[u].pctLinhas, '#1341c4'], ['Leite', share[u].pctLt, '#93aafc']].map(([rot, v, cor]) => (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}><ChipUf uf={u} /><span style={muted}>{share[u].linhasCla} de {share[u].linhas} produções</span></div>
+                    {[['Produções', share[u].pctLinhas, '#1341c4'], ['Leite', share[u].pctLt, '#93aafc']].map(([rot, v, cor]) => (
                       <div key={rot} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                        <span style={{ width: 40, fontSize: 10, color: '#6b7a99' }}>{rot}</span>
+                        <span style={{ width: 56, fontSize: 10, color: '#6b7a99' }}>{rot}</span>
                         <div style={{ flex: 1, height: 10, background: '#f4f6fb', borderRadius: 5, overflow: 'hidden' }}><div style={{ width: v + '%', height: '100%', background: cor }} /></div>
                         <span style={{ width: 48, fontSize: 11, fontWeight: 700, textAlign: 'right' }}>{pct(v)}</span>
                       </div>
@@ -222,7 +224,7 @@ export default function Mapeamento({ user, categoria }) {
                 ))}
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={st.th}>Estado</th><th style={thN}>Linhas</th><th style={thN}>Clamalu</th><th style={thN}>%</th><th style={thN}>Leite/ano (L)</th><th style={thN}>% Clamalu</th></tr></thead>
+                <thead><tr><th style={st.th}>Estado</th><th style={thN}>Produções</th><th style={thN}>Clamalu</th><th style={thN}>%</th><th style={thN}>Leite/ano (L)</th><th style={thN}>% Clamalu</th></tr></thead>
                 <tbody>
                   {[...ufs, 'GERAL'].map(u => { const s = share[u]; const t = u === 'GERAL' ? st.tot : {}; return (
                     <tr key={u}>
@@ -238,10 +240,10 @@ export default function Mapeamento({ user, categoria }) {
           {/* CLIENTES POR UF */}
           <div style={st.card}>
             <div style={st.cardTitle}>Quantidade de clientes por estado</div>
-            <div style={st.sub}>Em número e em porcentagem. <b>Laticínios</b> conta a empresa uma vez; <b>linhas</b> conta cada combinação de empresa e tipo de queijo (um mesmo laticínio pode aparecer com Mussarela, Prato e Provolone).</div>
+            <div style={st.sub}>Em número e em porcentagem. <b>Laticínios</b> conta a empresa uma vez; <b>produções</b> conta cada tipo de queijo que a empresa faz (um laticínio que faz Mussarela, Prato e Provolone são 3 produções).</div>
             <div style={st.g2}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={st.th}>Estado</th><th style={thN}>Laticínios</th><th style={thN}>%</th><th style={thN}>Linhas</th><th style={thN}>%</th></tr></thead>
+                <thead><tr><th style={st.th}>Estado</th><th style={thN}>Laticínios</th><th style={thN}>%</th><th style={thN}>Produções</th><th style={thN}>%</th></tr></thead>
                 <tbody>
                   {[...ufs, 'GERAL'].map(u => { const t = u === 'GERAL' ? st.tot : {}; return (
                     <tr key={u}>
@@ -261,7 +263,7 @@ export default function Mapeamento({ user, categoria }) {
           {/* TIPOS DE QUEIJO */}
           <div style={st.card}>
             <div style={st.cardTitle}>Tipos de queijo por estado</div>
-            <div style={st.sub}>Quantas linhas de cada tipo de queijo existem em cada estado, em número e em porcentagem da coluna.</div>
+            <div style={st.sub}>Quantas produções de cada tipo de queijo existem em cada estado, em número e em porcentagem da coluna.</div>
             <TabelaUf dados={tabelaUf(linhas, rotulo.queijo)} ufs={ufs} titulo="Tipo de queijo" />
           </div>
 
@@ -269,7 +271,7 @@ export default function Mapeamento({ user, categoria }) {
           {categoria === 'enzima' && (
             <div style={st.card}>
               <div style={st.cardTitle}>Volume de leite por ano, por estado</div>
-              <div style={st.sub}>Soma do volume declarado pelos laticínios mapeados, em litros por ano. Cada empresa × tipo de queijo conta uma vez.</div>
+              <div style={st.sub}>Soma do volume declarado pelos laticínios mapeados, em litros por ano. Cada produção conta uma vez.</div>
               <div style={st.g2}>
                 <div style={{ paddingTop: 8 }}><BarrasUf ufs={ufs} valores={Object.fromEntries(ufs.map(u => [u, vol[u].leite]))} fmt={v => milhoes(v) + ' L'} /></div>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -290,7 +292,7 @@ export default function Mapeamento({ user, categoria }) {
           {/* RENDIMENTO */}
           <div style={st.card}>
             <div style={st.cardTitle}>Rendimento — litros de leite por kg de queijo</div>
-            <div style={st.sub}>Volume de leite/ano dividido pelo volume de queijo/ano, por <b>{rotRend.toLowerCase()}</b> e por estado. Quanto menor o número, mais queijo sai do mesmo leite. Só entram as linhas que têm os dois volumes (leite spot, leite pasteurizado e bebida láctea ficam fora).</div>
+            <div style={st.sub}>Volume de leite/ano dividido pelo volume de queijo/ano, por <b>{rotRend.toLowerCase()}</b> e por estado. Quanto menor o número, mais queijo sai do mesmo leite. Só entram as produções que têm os dois volumes (leite spot, leite pasteurizado e bebida láctea ficam fora).</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
               {[...ufs, 'GERAL'].map(u => {
                 const r = u === 'GERAL' ? rendimento(linhas, () => 'GERAL')[0] : rendUf[u]
@@ -298,14 +300,14 @@ export default function Mapeamento({ user, categoria }) {
                   <div key={u} style={{ flex: 1, minWidth: 120, background: '#f4f6fb', borderRadius: 10, padding: '10px 14px', borderLeft: `4px solid ${u === 'GERAL' ? '#0f1729' : cu(u)}` }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7a99' }}>{u === 'GERAL' ? 'GERAL' : u}</div>
                     <div style={{ fontSize: 22, fontWeight: 800 }}>{r ? dec2(r.rend) : '—'} <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7a99' }}>L/kg</span></div>
-                    <div style={{ fontSize: 10, color: '#9aa6bf' }}>{r ? `${r.n} linhas` : 'sem volumes'}</div>
+                    <div style={{ fontSize: 10, color: '#9aa6bf' }}>{r ? `${r.n} produções` : 'sem volumes'}</div>
                   </div>
                 )
               })}
             </div>
             <div style={{ maxHeight: 380, overflow: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={st.th}>{rotRend}</th><th style={thN}>Linhas</th><th style={thN}>Leite (L/ano)</th><th style={thN}>%</th><th style={thN}>Queijo (kg/ano)</th><th style={thN}>L por kg</th></tr></thead>
+                <thead><tr><th style={st.th}>{rotRend}</th><th style={thN}>Produções</th><th style={thN}>Leite (L/ano)</th><th style={thN}>%</th><th style={thN}>Queijo (kg/ano)</th><th style={thN}>L por kg</th></tr></thead>
                 <tbody>
                   {(() => { const totLt = rendPor.reduce((s, o) => s + o.leite, 0); return rendPor.map(o => (
                     <tr key={o.cat}>
@@ -323,14 +325,14 @@ export default function Mapeamento({ user, categoria }) {
           {/* DISTRIBUIDORES */}
           <div style={st.card}>
             <div style={st.cardTitle}>Distribuidores por estado</div>
-            <div style={st.sub}>Quem atende cada linha. {categoria === 'cultura' && <><b>Sem cultura comercial</b> são os laticínios que fazem soro fermento, vendem leite spot ou produzem sem o insumo. </>}<b>Não informado</b> é o que veio em branco na planilha.</div>
+            <div style={st.sub}>Quem fornece o insumo de cada produção. {categoria === 'cultura' && <><b>Sem cultura comercial</b> são os laticínios que fazem soro fermento, vendem leite spot ou produzem sem o insumo. </>}<b>Não informado</b> é o que veio em branco na planilha.</div>
             <TabelaUf dados={tabelaUf(linhas, rotulo.distribuidor)} ufs={ufs} titulo="Distribuidor" />
           </div>
 
           {/* MARCA (enzima) / CULTURA USADA (cultura) */}
           <div style={st.card}>
             <div style={st.cardTitle}>{categoria === 'enzima' ? 'Marcas por estado' : 'Culturas usadas por estado'}</div>
-            <div style={st.sub}>{categoria === 'enzima' ? 'Qual marca de coagulante cada linha usa, em número e em porcentagem.' : 'A apresentação da cultura declarada em cada linha, em número e em porcentagem.'}</div>
+            <div style={st.sub}>{categoria === 'enzima' ? 'Qual marca de coagulante cada produção usa, em número e em porcentagem.' : 'A apresentação da cultura declarada em cada produção, em número e em porcentagem.'}</div>
             <TabelaUf dados={tabelaUf(linhas, categoria === 'enzima' ? rotulo.marca : rotulo.apresentacao)} ufs={ufs} titulo={categoria === 'enzima' ? 'Marca' : 'Cultura (apresentação)'} />
           </div>
         </div>
