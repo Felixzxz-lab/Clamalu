@@ -16,6 +16,7 @@ quebra nada.
 | 03 | `03_usuarios_responsaveis.sql` | coluna `usuarios.vendedores` — **substituído pelo 04**, ver abaixo | ✅ 10/07/2026 |
 | 04 | `04_vendedores_ocultos.sql` | coluna `usuarios.vendedores_ocultos` e converte a lista do 03 | ✅ 19/08/2026 |
 | 05 | `05_mapeamento.sql` | tabela `mapeamento` (Culturas e Enzimas) + libera as 2 páginas para o admin | ✅ 27/09/2026 |
+| 06 | `06_preco_euro.sql` | colunas `vendas.cotacao_euro` e `vendas.preco_euro` (gráfico de euro da tela Produto) | ✅ 06/10/2026 |
 
 ### Sobre o 03 → 04
 
@@ -43,6 +44,7 @@ antigo, então repetir não faz efeito, mas também não tem por quê.
 | `2026-08_carga_julho.sql` | erros de digitação da planilha de vendas de julho/2026: NF com data em agosto, NF com data `30/01/00` criando o ano 2000 na base, e duas NFs digitadas trocadas |
 | `2026-09_duplicatas_julho.sql` | apaga 47 linhas de julho/2026 importadas duas vezes (+R$ 350 mil), entre elas a do ano 2000 |
 | `2026-09_wendel_para_maicon.sql` | reatribui o histórico do WENDEL ao MAICON (assumiu a carteira) e ajusta `vendedores_ocultos`. A importação já converte o nome antigo (`lib/planilha.js`) |
+| *(sem arquivo — carga por script, 06/10/2026)* | preenche `cotacao_euro`/`preco_euro` do histórico casando cada linha (NF + cliente + produto + qtde + valor) com as planilhas originais: "Geral atual 2025", ANO FISCAL 2026 e as de julho, agosto e setembro. 93% batem exato; o resto usa a cotação da mesma NF ou do mesmo dia. Linha com cotação 0 (vendida em real) fica nula |
 
 ## RLS
 

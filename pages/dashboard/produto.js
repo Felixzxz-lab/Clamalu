@@ -17,6 +17,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Le
 const AZUIS = ['#1341c4','#2a5ae0','#4a78f5','#7399f8','#93aafc','#b5c5fd']
 function fmtVal(v){if(!v)return'—';if(v>=1e6)return'R$ '+(v/1e6).toFixed(2).replace('.',',')+' Mi';if(v>=1e3)return'R$ '+(v/1e3).toFixed(0)+' Mil';return'R$ '+Math.round(v)}
 function fmtN(v){return Number(Math.round(v||0)).toLocaleString('pt-BR')}
+function fmtEur(v){return v==null?'—':'€ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function difPct(p){const d=(p.f30.media/p.f70.media-1)*100;return (d>=0?'+':'')+d.toFixed(1).replace('.',',')+'%'}
 
 export default function Produto({ user }) {
   const router = useRouter()
@@ -26,6 +28,7 @@ export default function Produto({ user }) {
   const [fMes, setFMes] = useState([])
   const [fVend, setFVend] = useState([])
   const [fSeg, setFSeg] = useState('Todos') // filtro do bloco de região
+  const [fSegEuro, setFSegEuro] = useState('Todos') // filtro do bloco de euro
   const [sel, setSel] = useState(null)
   const opcoes = useOpcoes()
 
@@ -61,6 +64,9 @@ export default function Produto({ user }) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), 'Produto por Região')
     const s3 = [['UF','% Valor','QTDE','Valor'], ...(dados?.ufTotal||[]).map(u=>[u.uf,u.pct,u.qtde,u.valor])]
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3), 'Participação UF')
+    const s4 = [['Produto','€ médio clientes 70%','QTDE 70%','Clientes 70%','€ médio demais','QTDE demais','Clientes demais']]
+    ;(dados?.euro?.produtos||[]).forEach(p => s4.push([p.produto, p.f70?.media ?? '', p.f70?.qtde ?? '', p.f70?.clientes ?? '', p.f30?.media ?? '', p.f30?.qtde ?? '', p.f30?.clientes ?? '']))
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s4), 'Preço médio Euro')
     XLSX.writeFile(wb, 'Clamalu_Produto.xlsx')
   }
 
@@ -107,6 +113,30 @@ export default function Produto({ user }) {
   }
   const bV = barTop(dados?.top5Valor || [], 'valor')
   const bQ = barTop(dados?.top5Qtde || [], 'qtde')
+
+  // preço médio em euro: clientes 70% x 30% (lib/euro.js). Azul x laranja da
+  // paleta Okabe-Ito (lib/cores.js) — distinguíveis também para daltônico.
+  const euro = dados?.euro
+  const prodEuro = (euro?.produtos || []).filter(p => fSegEuro === 'Todos' || segmentoDe(p.produto) === fSegEuro)
+  const FAIXAS_EURO = [
+    { k:'f70', cor:'#0072B2', nome:`Clientes 70% (${euro?.clientes70 || 0})` },
+    { k:'f30', cor:'#E69F00', nome:`Demais clientes (${Math.max(0,(euro?.clientesTotal||0)-(euro?.clientes70||0))})` },
+  ]
+  const bEuro = {
+    data: {
+      labels: prodEuro.map(p => p.produto.length > 26 ? p.produto.slice(0,26)+'…' : p.produto),
+      datasets: FAIXAS_EURO.map(f => ({ label:f.nome, backgroundColor:f.cor, borderRadius:3, barPercentage:0.9, categoryPercentage:0.75, data: prodEuro.map(p => p[f.k]?.media ?? null) })),
+    },
+    opts: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{
+        title: it => prodEuro[it[0].dataIndex].produto,
+        label: it => { const g = prodEuro[it.dataIndex][FAIXAS_EURO[it.datasetIndex].k]; return `${FAIXAS_EURO[it.datasetIndex].nome}: ${fmtEur(g.media)} · ${fmtN(g.qtde)} un. · ${g.clientes} cliente(s)` },
+        afterBody: it => { const p = prodEuro[it[0].dataIndex]; return p.f70 && p.f30 ? `Demais pagam ${difPct(p)} que os clientes 70%` : '' },
+      } } },
+      scales:{ x:{ grid:{color:'#f0f2f8'}, ticks:{ callback:v => '€ '+v } }, y:{ grid:{display:false}, ticks:{ font:{size:10} } } }
+    }
+  }
 
   // participação por estado: mês fechado e acumulado do ano (lib/periodo.js)
   const per = recortes(linhas)
@@ -168,6 +198,33 @@ export default function Produto({ user }) {
               <div style={st.cardTitle}>Top 5 por quantidade</div>
               <div style={{ height:200 }}><Bar data={bQ.data} options={bQ.opts} /></div>
             </div>
+          </div>
+
+          {/* PREÇO MÉDIO EM EURO: clientes 70% x demais */}
+          <div style={st.card}>
+            <div style={{ display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:6 }}>
+              <span style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99' }}>Preço médio em euro por produto — clientes 70% x demais</span>
+              <div style={{ display:'flex',gap:4,marginLeft:'auto' }}>
+                {['Todos', ...SEGMENTOS].map(s => (
+                  <button key={s} onClick={()=>setFSegEuro(s)} style={{ padding:'4px 12px',borderRadius:20,border:`1.5px solid ${fSegEuro===s?'#1341c4':'#e2e6f0'}`,background:fSegEuro===s?'#1341c4':'white',color:fSegEuro===s?'white':'#6b7a99',fontSize:11,fontWeight:600,cursor:'pointer' }}>{s}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:10 }}>
+              {euro?.rotulo} — acumulado do ano · {euro?.clientes70} de {euro?.clientesTotal} clientes formam 70% do faturamento (mesmo corte da tela Cliente) · média ponderada pela quantidade · produtos vendidos em real não entram
+            </div>
+            <div style={{ display:'flex',gap:16,marginBottom:10 }}>
+              {FAIXAS_EURO.map(f => (
+                <span key={f.k} style={{ display:'inline-flex',alignItems:'center',gap:6,fontSize:11,fontWeight:600,color:'#374151' }}>
+                  <span style={{ width:12,height:12,borderRadius:2,background:f.cor }} />{f.nome}
+                </span>
+              ))}
+            </div>
+            {prodEuro.length===0
+              ? <div style={{ fontSize:12,color:'#9aa6bf' }}>Nenhum produto com preço em euro no período.</div>
+              : <div style={{ maxHeight:520,overflowY:'auto',paddingRight:4 }}>
+                  <div style={{ height:Math.max(160, prodEuro.length*34) }}><Bar data={bEuro.data} options={bEuro.opts} /></div>
+                </div>}
           </div>
 
           {/* REGIÃO: todos os produtos */}

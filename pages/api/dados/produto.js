@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../lib/supabase'
 import { requireAuth, aplicarFiltroVendedor } from '../../../lib/auth'
 import { selectAll } from '../../../lib/db'
+import { precoEuroPorFaixa } from '../../../lib/euro'
 
 export default requireAuth(async function handler(req, res) {
   if (!req.user.paginas?.includes('produto')) return res.status(403).json({ error: 'Sem acesso' })
@@ -13,7 +14,7 @@ export default requireAuth(async function handler(req, res) {
   let data
   try {
     data = await selectAll(() => {
-      let q = db.from('vendas').select('produto,uf,qtde,valor_total,ano,mes,vendedor')
+      let q = db.from('vendas').select('produto,uf,qtde,valor_total,ano,mes,vendedor,cliente,preco_euro')
       if (anos.length) q = q.in('ano', anos)
       if (meses.length) q = q.in('mes', meses)
       q = aplicarFiltroVendedor(q, req.user, vends) // esconde os vendedores vetados p/ o usuário
@@ -77,6 +78,7 @@ export default requireAuth(async function handler(req, res) {
     tabelaProdutos: prodRank,
     top5Valor: prodRank.slice(0, 5),
     top5Qtde: [...prodRank].sort((a, b) => b.qtde - a.qtde).slice(0, 5),
+    euro: precoEuroPorFaixa(data),
     linhas
   })
 })
