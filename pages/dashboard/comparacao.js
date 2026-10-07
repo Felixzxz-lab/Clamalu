@@ -17,6 +17,14 @@ function fmtVal(v){if(!v||v===0)return'—';if(v>=1e6)return'R$ '+(v/1e6).toFixe
 function fmtN(v){if(!v)return'—';return Number(Math.round(v)).toLocaleString('pt-BR')}
 function delta(a,b){if(!a||!b)return null;return((b-a)/a*100)}
 
+// Preço médio em euro ponderado pela quantidade, com o menor e o maior preço
+// praticados. Linha sem preco_euro (produto vendido em real) não entra.
+const euroAcc = () => ({ q:0, e:0, min:Infinity, max:-Infinity })
+function euroSoma(a, r){ if(!(r.preco_euro>0) || !(r.qtde>0)) return; a.q+=r.qtde; a.e+=r.preco_euro*r.qtde; const c=Math.round(r.preco_euro*100)/100; a.min=Math.min(a.min,c); a.max=Math.max(a.max,c) } // centavos: a planilha traz 14,9993 x 15,0006 para o mesmo preço
+const euroMedia = a => a.q ? { media:a.e/a.q, min:a.min, max:a.max, qtde:a.q } : null
+const fmtEur = v => v==null ? '—' : '€ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
+const r2 = v => Math.round(v * 100) / 100
+
 export default function Comparacao({ user }) {
   const router = useRouter()
   const [dados, setDados] = useState(null)
@@ -74,8 +82,8 @@ export default function Comparacao({ user }) {
       rows.push([MESES[m-1], ...anos.flatMap(a => [dados?.mensal?.[a]?.[m]?.valor||0, dados?.mensal?.[a]?.[m]?.qtde||0])])
     })
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Comparativo')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(planilhaPrecos()), 'Preço médio por cliente')
     if (doComp) {
-      const r2 = v => Math.round(v * 100) / 100
       const prod = [['Movimento','Produto',String(aBase),String(aComp),'Diferença']]
       produtosQueCresceram.forEach(p => prod.push(['Cresceu', p.chave, p.v0, p.v1, p.diff]))
       produtosQueCairam.forEach(p => prod.push(['Caiu', p.chave, p.v0, p.v1, p.diff]))
@@ -129,8 +137,12 @@ export default function Comparacao({ user }) {
   const produtosDoCliente = (() => {
     if(!cliCompSel) return []
     const m={}
-    for(const r of linhasC){ if(r.cliente!==cliCompSel) continue; const o=m[r.produto]=m[r.produto]||{v0:0,v1:0,q0:0,q1:0}; if(r.ano===aBase){o.v0+=r.valor_total;o.q0+=r.qtde} else if(r.ano===aComp){o.v1+=r.valor_total;o.q1+=r.qtde} }
-    return Object.entries(m).map(([k,d])=>({ produto:k, v0:d.v0, v1:d.v1, q0:d.q0, q1:d.q1, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null })).sort((a,b)=>b.v0-a.v0).slice(0,12)
+    for(const r of linhasC){
+      if(r.cliente!==cliCompSel) continue
+      const o=m[r.produto]=m[r.produto]||{v0:0,v1:0,q0:0,q1:0,e0:euroAcc(),e1:euroAcc()}
+      if(r.ano===aBase){o.v0+=r.valor_total;o.q0+=r.qtde;euroSoma(o.e0,r)} else if(r.ano===aComp){o.v1+=r.valor_total;o.q1+=r.qtde;euroSoma(o.e1,r)}
+    }
+    return Object.entries(m).map(([k,d])=>{ const e0=euroMedia(d.e0), e1=euroMedia(d.e1); return { produto:k, v0:d.v0, v1:d.v1, q0:d.q0, q1:d.q1, e0, e1, varV:d.v0>0&&d.v1>0?(d.v1-d.v0)/d.v0*100:null, varE:e0&&e1?(e1.media-e0.media)/e0.media*100:null } }).sort((a,b)=>b.v0-a.v0).slice(0,12)
   })()
 
   // Radar: pares cliente x produto que existiam no ano base e ZERARAM no ano comparado
@@ -143,6 +155,22 @@ export default function Comparacao({ user }) {
     }
     return Object.values(m).filter(o=>o.v0>0 && o.v1===0).sort((a,b)=>b.v0-a.v0)
   })() : []
+  // Preço médio vendido: cliente × produto × ano, todos os clientes (vai no Excel)
+  function planilhaPrecos(){
+    const m={}
+    for(const r of linhasC){
+      if(!anos.includes(r.ano)) continue
+      const k=r.cliente+'||'+r.produto+'||'+r.ano
+      const o=m[k]=m[k]||{ cliente:r.cliente, uf:r.uf, produto:r.produto, ano:r.ano, q:0, v:0, e:euroAcc() }
+      o.q+=r.qtde; o.v+=r.valor_total; euroSoma(o.e,r)
+    }
+    const out=[['Cliente','UF','Produto','Ano','QTDE','Valor R$','€ médio','€ menor','€ maior']]
+    Object.values(m).sort((a,b)=>a.cliente.localeCompare(b.cliente)||a.produto.localeCompare(b.produto)||a.ano-b.ano).forEach(o=>{
+      const e=euroMedia(o.e)
+      out.push([o.cliente,o.uf,o.produto,o.ano,o.q,r2(o.v),e?r2(e.media):'',e?r2(e.min):'',e?r2(e.max):''])
+    })
+    return out
+  }
   const zeradosTop = zerados.slice(0,25)
   const zeradosTotal = zerados.reduce((s,z)=>s+z.v0,0)
   const zeradosClientes = new Set(zerados.map(z=>z.cliente)).size
@@ -455,7 +483,7 @@ export default function Comparacao({ user }) {
 
           {/* COMPARATIVO POR CLIENTE + DRILL */}
           {doComp && (
-            <div style={{ display:'grid',gridTemplateColumns:'1fr 1.15fr',gap:16,alignItems:'start' }}>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1.6fr',gap:16,alignItems:'start' }}>
               <div style={st.card}>
                 <div style={{ fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.8px',color:'#6b7a99',marginBottom:4 }}>Comparativo por cliente — {aBase} vs {aComp} <span style={{ fontWeight:500,textTransform:'none',color:'#9aa6bf' }}>· {perLabel}</span></div>
                 <div style={{ fontSize:11,color:'#9aa6bf',marginBottom:12 }}>Clique num cliente para ver onde o consumo dele caiu →</div>
@@ -480,21 +508,30 @@ export default function Comparacao({ user }) {
                   <thead><tr>
                     <th style={{ ...st.th,textAlign:'left' }}>Produto</th>
                     <th style={st.th}>Qtd {aBase}</th><th style={st.th}>Qtd {aComp}</th>
-                    <th style={st.th}>{aBase}</th><th style={st.th}>{aComp}</th>
+                    <th style={st.th}>R$ {aBase}</th><th style={st.th}>R$ {aComp}</th>
                     <th style={st.th}>Var.</th>
+                    <th style={{ ...st.th,borderLeft:'2px solid #e2e6f0' }} title='Preço médio em euro, ponderado pela quantidade'>€ médio {aBase}</th><th style={st.th}>€ médio {aComp}</th>
+                    <th style={st.th}>Var. €</th>
                   </tr></thead>
                   <tbody>
-                    {produtosDoCliente.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={6}>Clique num cliente.</td></tr>}
+                    {produtosDoCliente.length===0 && <tr><td style={{ ...st.td,textAlign:'left',color:'#9aa6bf' }} colSpan={9}>Clique num cliente.</td></tr>}
                     {produtosDoCliente.map((p,i)=>(
                       <tr key={i}>
                         <td style={{ ...st.td,textAlign:'left',fontWeight:600,fontSize:11 }}>{p.produto}</td>
                         <td style={st.td}>{fmtN(p.q0)}</td>
                         <td style={{ ...st.td, fontWeight: p.q1!==p.q0?700:400, color: p.q1<p.q0?'#dc2626':p.q1>p.q0?'#16a34a':'#0f1729' }}>{fmtN(p.q1)}</td>
                         <td style={st.td}>{fmtVal(p.v0)}</td><td style={st.td}>{fmtVal(p.v1)}</td><td style={st.td}>{varCell(p.varV)}</td>
+                        {[p.e0,p.e1].map((e,j)=>(
+                          <td key={j} style={{ ...st.td,whiteSpace:'nowrap',...(j===0?{borderLeft:'2px solid #e2e6f0'}:{}) }} title={e&&e.min!==e.max?`menor ${fmtEur(e.min)} · maior ${fmtEur(e.max)}`:''}>
+                            {fmtEur(e?.media)}{e&&e.min!==e.max&&<span style={{ color:'#9aa6bf',fontSize:10 }}> ±</span>}
+                          </td>
+                        ))}
+                        <td style={st.td}>{varCell(p.varE)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                <div style={{ fontSize:10,color:'#9aa6bf',marginTop:8 }}>€ médio = preço em euro ponderado pela quantidade · <b>±</b> = vendeu a preços diferentes no ano (passe o mouse para ver o menor e o maior) · — = produto vendido em real ou sem compra no ano</div>
               </div>
             </div>
           )}
