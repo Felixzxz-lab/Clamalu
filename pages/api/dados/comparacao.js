@@ -18,7 +18,7 @@ export default requireAuth(async function handler(req, res) {
   let data
   try {
     data = await selectAll(() => {
-      let q = db.from('vendas').select('ano,mes,vendedor,cliente,produto,uf,qtde,valor_total,preco_euro')
+      let q = db.from('vendas').select('ano,mes,vendedor,cliente,produto,uf,qtde,valor_unit,valor_total,preco_euro,cotacao_euro')
       if (anosArr.length) q = q.in('ano', anosArr)   // vazio = todos os anos
       if (mesesArr?.length) q = q.in('mes', mesesArr)
       q = aplicarFiltroVendedor(q, req.user, vends) // esconde os vendedores vetados p/ o usuário
@@ -62,7 +62,7 @@ export default requireAuth(async function handler(req, res) {
     }
   })
 
-  const linhas = data.map(r => ({ ano: r.ano, mes: r.mes, vendedor: r.vendedor, cliente: r.cliente, produto: r.produto, uf: r.uf, qtde: r.qtde, valor_total: r.valor_total, preco_euro: r.preco_euro }))
+  const linhas = data.map(r => ({ ano: r.ano, mes: r.mes, vendedor: r.vendedor, cliente: r.cliente, produto: r.produto, uf: r.uf, qtde: r.qtde, valor_total: r.valor_total, preco_euro: r.preco_euro, cotacao_euro: r.cotacao_euro, valor_unit: r.valor_unit }))
 
   return res.status(200).json({ mensal, vendMes, totaisPorAno, anos: anosEfetivos, linhas })
 })

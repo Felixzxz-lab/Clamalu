@@ -45,6 +45,7 @@ antigo, então repetir não faz efeito, mas também não tem por quê.
 | `2026-09_duplicatas_julho.sql` | apaga 47 linhas de julho/2026 importadas duas vezes (+R$ 350 mil), entre elas a do ano 2000 |
 | `2026-09_wendel_para_maicon.sql` | reatribui o histórico do WENDEL ao MAICON (assumiu a carteira) e ajusta `vendedores_ocultos`. A importação já converte o nome antigo (`lib/planilha.js`) |
 | *(sem arquivo — carga por script, 06/10/2026)* | preenche `cotacao_euro`/`preco_euro` do histórico casando cada linha (NF + cliente + produto + qtde + valor) com as planilhas originais: "Geral atual 2025", ANO FISCAL 2026 e as de julho, agosto e setembro. 93% batem exato; o resto usa a cotação da mesma NF ou do mesmo dia. Linha com cotação 0 (vendida em real) fica nula |
+| `2026-10_cotacao_euro.sql` | 25 linhas de 2026 com a cotação do euro digitada errada (12/03, 18/03, 20/07 e 25/08) e 2 de 2025 com o € digitado errado (Bom Sabor NF 33864, Ourilândia NF 34292). Recalcula `preco_euro` = R$ ÷ cotação. As NFs 32391 e 33317 (produto trocado na linha) ficaram de fora até a Clamalu confirmar |
 
 ## RLS
 
