@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { parse } from 'cookie'
@@ -20,6 +20,7 @@ const fmtPct = v => (v||0).toFixed(1).replace('.', ',') + '%'
 const fmtEur = v => v==null ? '—' : '€ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const fmtRs = v => 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const fmtData = d => d ? d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4) : '—'
+const normNome = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() // "bom sabor" acha "LATICINIO BOM SABOR"
 const MESES_CURTO = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
 export default function Cliente({ user }) {
@@ -30,6 +31,12 @@ export default function Cliente({ user }) {
   const [fMes, setFMes] = useState([])
   const [fVend, setFVend] = useState([])
   const [cliFoco, setCliFoco] = useState(null) // cliente de "o que comprou" e da linha mês a mês
+  const blocoCli = useRef(null)
+  // escolher um cliente nas tabelas de baixo leva até o comparativo do topo;
+  // na lista do próprio comparativo só troca o cliente, sem rolar
+  const focar = (c, rolar = true) => { setCliFoco(c); if (rolar) setTimeout(() => blocoCli.current?.scrollIntoView({ behavior:'smooth', block:'start' }), 50) }
+  const [cliAnos, setCliAnos] = useState(null) // lista de clientes do comparativo entre anos
+  const [filtroLista, setFiltroLista] = useState('')
   const [sel, setSel] = useState(null)
   const [precos, setPrecos] = useState(null) // compras do cliente em foco, todos os anos
   const [anoB, setAnoB] = useState(null), [anoC, setAnoC] = useState(null)
@@ -38,6 +45,17 @@ export default function Cliente({ user }) {
 
   useEffect(() => { carregar() }, [fAno, fMes, fVend])
   useEffect(() => { carregarPrecos() }, [cliFoco, fVend])
+  useEffect(() => { carregarCliAnos() }, [anoB, anoC, fMes, fVend])
+
+  async function carregarCliAnos() {
+    if (anoB == null || anoC == null || anoB === anoC) { setCliAnos(null); return }
+    const p = new URLSearchParams({ base: anoB, comp: anoC })
+    if (fMes.length) p.set('mes', fMes.join(','))
+    if (fVend.length) p.set('vendedor', fVend.join(','))
+    const r = await fetch('/api/dados/cliente-anos?' + p)
+    if (r.status === 401) { router.push('/'); return }
+    setCliAnos(await r.json())
+  }
 
   // anos do comparativo: por padrão os 2 mais recentes da base
   const anosOpc = (opcoes.anos || []).map(Number).sort((a,b)=>a-b)
@@ -65,7 +83,7 @@ export default function Cliente({ user }) {
     const d = await r.json()
     setDados(d)
     setSel(null)
-    setCliFoco(router.query.cliente || d.ranking?.[0]?.cliente || null) // ?cliente= vem da tela Comparação
+    setCliFoco(prev => prev || router.query.cliente || d.ranking?.[0]?.cliente || null) // ?cliente= vem da tela Comparação
     setLoading(false)
   }
 
@@ -73,7 +91,7 @@ export default function Cliente({ user }) {
   function pick(dim, value) {
     if (!value) return
     setSel(s => (s && s.dim === dim && s.value === value) ? null : { dim, value })
-    if (dim === 'cliente') setCliFoco(value)
+    if (dim === 'cliente') focar(value)
   }
   const isSel = (dim, value) => sel && sel.dim === dim && sel.value === value
 
@@ -109,7 +127,7 @@ export default function Cliente({ user }) {
   // Comparativo do cliente entre dois anos, por produto, com os preços pagos.
   // Período comparável: se o ano comparado é o corrente, os dois anos vão só
   // até o último mês carregado (senão jan–dez contra jan–set faz tudo "cair").
-  const mesesCmp = (() => {
+  const mesesCmp = cliAnos?.meses || (() => { // a lista da esquerda já vem com o período certo
     let ms = fMes.length ? fMes.map(Number).sort((a,b)=>a-b) : [1,2,3,4,5,6,7,8,9,10,11,12]
     const u = precos?.ultimo
     if (u && anoC === u.ano) ms = ms.filter(m => m <= u.mes)
@@ -238,6 +256,115 @@ export default function Cliente({ user }) {
 
       {loading?<div style={{ padding:40,textAlign:'center',color:'#6b7a99' }}>Carregando dados...</div>:(
         <div style={st.page}>
+          {/* COMPARATIVO ENTRE ANOS: LISTA DE CLIENTES + PREÇOS PAGOS (como era na Comparação até 08/10/2026) */}
+          <div ref={blocoCli} style={{ display:'grid',gridTemplateColumns:'minmax(430px,1fr) 2fr',gap:16,alignItems:'start',scrollMarginTop:70 }}>
+            <div style={st.card}>
+              <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap' }}>
+                <div style={st.cardTitle}>Comparativo por cliente</div>
+                <div style={{ display:'flex',alignItems:'center',gap:6,fontSize:12 }}>
+                  <select value={anoB ?? ''} onChange={e=>setAnoB(Number(e.target.value))} style={{ padding:'4px 6px',borderRadius:6,border:'1.5px solid #e2e6f0' }}>{anosOpc.map(a=><option key={a} value={a}>{a}</option>)}</select>
+                  <span style={{ color:'#6b7a99' }}>→</span>
+                  <select value={anoC ?? ''} onChange={e=>setAnoC(Number(e.target.value))} style={{ padding:'4px 6px',borderRadius:6,border:'1.5px solid #e2e6f0' }}>{anosOpc.map(a=><option key={a} value={a}>{a}</option>)}</select>
+                </div>
+              </div>
+              <div style={st.sub}>Período: <b>{rotuloCmp}</b> nos dois anos. Clique num cliente para ver ao lado onde o consumo dele mudou →</div>
+              <input value={filtroLista} onChange={e=>setFiltroLista(e.target.value)} placeholder="Filtrar pelo nome"
+                style={{ width:'100%',boxSizing:'border-box',border:'1.5px solid #e2e6f0',borderRadius:8,padding:'6px 10px',fontSize:12,marginBottom:8 }} />
+              <div style={{ maxHeight:560,overflowY:'auto' }}>
+                <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                  <thead><tr>
+                    <th style={st.th}>#</th><th style={st.th}>Cliente</th>
+                    <th style={{ ...st.th,textAlign:'right' }}>{anoB}</th><th style={{ ...st.th,textAlign:'right' }}>{anoC}</th><th style={{ ...st.th,textAlign:'right' }}>Var.</th>
+                  </tr></thead>
+                  <tbody>
+                    {!cliAnos && <tr><td style={{ ...st.td,color:'#9aa6bf' }} colSpan={5}>{anoB===anoC ? 'Escolha dois anos diferentes.' : 'Carregando...'}</td></tr>}
+                    {(cliAnos?.clientes || []).map((c,i) => ({ c, i })).filter(({ c }) => !filtroLista || normNome(c.cliente).includes(normNome(filtroLista))).map(({ c, i }) => (
+                      <tr key={c.cliente} onClick={()=>focar(c.cliente, false)} style={{ cursor:'pointer',background:cliFoco===c.cliente?'#e8f7ee':'' }}>
+                        <td style={st.td}><span style={st.pos}>{i+1}</span></td>
+                        <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{c.cliente}<div style={{ fontSize:10,color:'#9aa6bf',fontWeight:500 }}>{c.uf}</div></td>
+                        <td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap' }}>{fmtVal(c.v0)}</td>
+                        <td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap' }}>{fmtVal(c.v1)}</td>
+                        <td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap',fontWeight:700,color:c.v1>=c.v0?'#16a34a':'#dc2626' }}>
+                          {c.v0===0 ? <span style={{ color:'#1341c4' }}>novo</span> : c.v1===0 ? 'parou' : (c.varV>=0?'▲':'▼')+' '+Math.abs(c.varV).toFixed(1).replace('.',',')+'%'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {/* CLIENTE EM FOCO: COMPARATIVO ENTRE ANOS COM OS PREÇOS PAGOS (veio da tela Comparação em 08/10/2026) */}
+            <div style={{ ...st.card,minWidth:0 }}>
+              <div style={st.cardTitle}>Onde o consumo do cliente mudou — preços pagos</div>
+              <div style={{ fontSize:12,fontWeight:700,color:'#0f1729',margin:'8px 0 2px' }}>{cliFoco}</div>
+              <div style={st.sub}>
+                Período: <b>{rotuloCmp}</b> nos dois anos · {fmtVal(totCmp.v0)} em {anoB} → {fmtVal(totCmp.v1)} em {anoC} · maior queda primeiro. Cada preço é o que o cliente pagou, com os meses e a quantidade. Clique no produto para ver compra a compra.
+              </div>
+              {!cliFoco ? <div style={{ padding:20,textAlign:'center',color:'#9aa6bf',fontSize:12 }}>Clique num cliente na lista ao lado.</div>
+              : precos?.cliente !== cliFoco ? <div style={{ padding:20,textAlign:'center',color:'#9aa6bf',fontSize:12 }}>Carregando compras...</div>
+              : anoB === anoC ? <div style={{ padding:20,textAlign:'center',color:'#9aa6bf',fontSize:12 }}>Escolha dois anos diferentes.</div>
+              : (
+              <div style={{ maxHeight:520,overflowY:'auto' }}>
+                <table style={{ width:'100%',borderCollapse:'collapse' }}>
+                  <thead><tr>
+                    <th style={st.th}>Produto</th>
+                    <th style={{ ...st.th,textAlign:'right' }}>Qtd {anoB}</th><th style={{ ...st.th,textAlign:'right' }}>Qtd {anoC}</th>
+                    <th style={{ ...st.th,textAlign:'right' }}>R$ {anoB}</th><th style={{ ...st.th,textAlign:'right' }}>R$ {anoC}</th>
+                    <th style={{ ...st.th,textAlign:'right' }}>Var.</th>
+                    <th style={{ ...st.th,borderLeft:'2px solid #e2e6f0' }}>Preços pagos {anoB}</th><th style={st.th}>Preços pagos {anoC}</th>
+                  </tr></thead>
+                  <tbody>
+                    {prodCmp.length===0 && <tr><td style={{ ...st.td,color:'#9aa6bf' }} colSpan={8}>Sem compras nesses anos.</td></tr>}
+                    {prodCmp.map(p => {
+                      const abre = aberto === p.produto
+                      const linhasAbertas = abre ? [...p.c0, ...p.c1].sort((a,b)=>(a.data||'').localeCompare(b.data||'')) : []
+                      return [
+                        <tr key={p.produto} onClick={()=>setAberto(abre?null:p.produto)} style={{ cursor:'pointer',background:abre?'#f7f9ff':'' }}>
+                          <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{abre?'▾':'▸'} {p.produto}</td>
+                          <td style={{ ...st.td,textAlign:'right' }}>{p.q0?fmtN(p.q0):'—'}</td>
+                          <td style={{ ...st.td,textAlign:'right',fontWeight:p.q1!==p.q0?700:400,color:p.q1<p.q0?'#dc2626':p.q1>p.q0?'#16a34a':'#0f1729' }}>{p.q1?fmtN(p.q1):'—'}</td>
+                          <td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap' }}>{fmtVal(p.v0)}</td><td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap' }}>{fmtVal(p.v1)}</td>
+                          <td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap',fontWeight:700,color:p.diff>=0?'#16a34a':'#dc2626' }}>
+                            {p.v0===0 ? <span style={{ color:'#1341c4' }}>novo</span> : p.v1===0 ? 'parou' : (p.varV>=0?'▲':'▼')+' '+Math.abs(p.varV).toFixed(1).replace('.',',')+'%'}
+                          </td>
+                          {[p.f0,p.f1].map((fs,j)=>(
+                            <td key={j} style={{ ...st.td,fontSize:11,...(j===0?{borderLeft:'2px solid #e2e6f0'}:{}) }}>
+                              {fs.length===0 ? <span style={{ color:'#9aa6bf' }}>{(j?p.q1:p.q0) ? 'vendido em R$' : '—'}</span> : fs.map((f,i)=>(
+                                <div key={i} style={{ whiteSpace:'nowrap' }} title={f.suspeita?'Cotação do dia fora do padrão do mês: este preço em euro provavelmente está errado na planilha':''}>
+                                  <b style={{ color:f.suspeita?'#b45309':'#0f1729' }}>{fmtEur(f.preco)}</b>{f.suspeita&&' ⚠'}
+                                  <span style={{ color:'#9aa6bf' }}> · {rotuloMeses(f)} · {fmtN(f.qtde)} un</span>
+                                </div>
+                              ))}
+                            </td>
+                          ))}
+                        </tr>,
+                        abre && (
+                          <tr key={p.produto+'-x'}><td colSpan={8} style={{ padding:'4px 8px 12px 28px',background:'#f7f9ff',borderBottom:'1px solid #e2e6f0' }}>
+                            <table style={{ borderCollapse:'collapse',fontSize:11 }}>
+                              <thead><tr>{['Data','NF','Qtde','R$ unit.','Cotação','€ pago'].map(h=><th key={h} style={{ ...st.th,background:'#f7f9ff',position:'static',textAlign:h==='Data'||h==='NF'?'left':'right',fontSize:9 }}>{h}</th>)}</tr></thead>
+                              <tbody>{linhasAbertas.map((c,i)=>{ const s=linhaSuspeita(c,precos.cotMediana||{}); return (
+                                <tr key={i}>
+                                  <td style={{ ...st.td,fontSize:11 }}>{fmtData(c.data)}</td>
+                                  <td style={{ ...st.td,fontSize:11 }}>{c.nf||'—'}</td>
+                                  <td style={{ ...st.td,fontSize:11,textAlign:'right' }}>{fmtN(c.qtde)}</td>
+                                  <td style={{ ...st.td,fontSize:11,textAlign:'right' }}>{fmtRs(c.valor_unit)}</td>
+                                  <td style={{ ...st.td,fontSize:11,textAlign:'right',color:s?'#b45309':undefined,fontWeight:s?700:400 }} title={s?'Fora do padrão do mês ('+String(Math.round(precos.cotMediana[c.ano+'-'+c.mes]*1e4)/1e4).replace('.',',')+')':''}>{c.cotacao_euro?String(c.cotacao_euro).replace('.',','):'—'}{s&&' ⚠'}</td>
+                                  <td style={{ ...st.td,fontSize:11,textAlign:'right',fontWeight:700 }}>{c.preco_euro?fmtEur(c.preco_euro):'—'}</td>
+                                </tr>
+                              )})}</tbody>
+                            </table>
+                          </td></tr>
+                        )
+                      ]
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              )}
+              <div style={{ fontSize:10,color:'#9aa6bf',marginTop:8 }}>Dois preços no mesmo ano = reajuste no período. <b style={{ color:'#b45309' }}>⚠</b> = a cotação daquele dia está fora do padrão do mês, então o € dessa compra provavelmente está errado na planilha. "Vendido em R$" = produto sem cotação em euro.</div>
+            </div>
+          </div>
+
           {/* 70% DO FATURAMENTO: MÊS E ACUMULADO */}
           <div style={st.card}>
             <div style={st.cardTitle}>Clientes que representam 70% do faturamento</div>
@@ -290,85 +417,6 @@ export default function Cliente({ user }) {
               </div>
             </div>
           </div>
-
-          {/* CLIENTE EM FOCO: COMPARATIVO ENTRE ANOS COM OS PREÇOS PAGOS (veio da tela Comparação em 08/10/2026) */}
-          {cliFoco && (
-            <div style={st.card}>
-              <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' }}>
-                <div style={st.cardTitle}>Onde o consumo do cliente mudou — preços pagos</div>
-                <div style={{ display:'flex',alignItems:'center',gap:6,fontSize:12 }}>
-                  <select value={anoB ?? ''} onChange={e=>setAnoB(Number(e.target.value))} style={{ padding:'4px 6px',borderRadius:6,border:'1.5px solid #e2e6f0' }}>{anosOpc.map(a=><option key={a} value={a}>{a}</option>)}</select>
-                  <span style={{ color:'#6b7a99' }}>→</span>
-                  <select value={anoC ?? ''} onChange={e=>setAnoC(Number(e.target.value))} style={{ padding:'4px 6px',borderRadius:6,border:'1.5px solid #e2e6f0' }}>{anosOpc.map(a=><option key={a} value={a}>{a}</option>)}</select>
-                </div>
-              </div>
-              <div style={{ fontSize:12,fontWeight:700,color:'#0f1729',margin:'8px 0 2px' }}>{cliFoco}</div>
-              <div style={st.sub}>
-                Período: <b>{rotuloCmp}</b> nos dois anos · {fmtVal(totCmp.v0)} em {anoB} → {fmtVal(totCmp.v1)} em {anoC} · maior queda primeiro. Cada preço é o que o cliente pagou, com os meses e a quantidade. Clique no produto para ver compra a compra.
-              </div>
-              {precos?.cliente !== cliFoco ? <div style={{ padding:20,textAlign:'center',color:'#9aa6bf',fontSize:12 }}>Carregando compras...</div>
-              : anoB === anoC ? <div style={{ padding:20,textAlign:'center',color:'#9aa6bf',fontSize:12 }}>Escolha dois anos diferentes.</div>
-              : (
-              <div style={{ maxHeight:520,overflowY:'auto' }}>
-                <table style={{ width:'100%',borderCollapse:'collapse' }}>
-                  <thead><tr>
-                    <th style={st.th}>Produto</th>
-                    <th style={{ ...st.th,textAlign:'right' }}>Qtd {anoB}</th><th style={{ ...st.th,textAlign:'right' }}>Qtd {anoC}</th>
-                    <th style={{ ...st.th,textAlign:'right' }}>R$ {anoB}</th><th style={{ ...st.th,textAlign:'right' }}>R$ {anoC}</th>
-                    <th style={{ ...st.th,textAlign:'right' }}>Var.</th>
-                    <th style={{ ...st.th,borderLeft:'2px solid #e2e6f0' }}>Preços pagos {anoB}</th><th style={st.th}>Preços pagos {anoC}</th>
-                  </tr></thead>
-                  <tbody>
-                    {prodCmp.length===0 && <tr><td style={{ ...st.td,color:'#9aa6bf' }} colSpan={8}>Sem compras nesses anos.</td></tr>}
-                    {prodCmp.map(p => {
-                      const abre = aberto === p.produto
-                      const linhasAbertas = abre ? [...p.c0, ...p.c1].sort((a,b)=>(a.data||'').localeCompare(b.data||'')) : []
-                      return [
-                        <tr key={p.produto} onClick={()=>setAberto(abre?null:p.produto)} style={{ cursor:'pointer',background:abre?'#f7f9ff':'' }}>
-                          <td style={{ ...st.td,fontWeight:600,fontSize:11 }}>{abre?'▾':'▸'} {p.produto}</td>
-                          <td style={{ ...st.td,textAlign:'right' }}>{p.q0?fmtN(p.q0):'—'}</td>
-                          <td style={{ ...st.td,textAlign:'right',fontWeight:p.q1!==p.q0?700:400,color:p.q1<p.q0?'#dc2626':p.q1>p.q0?'#16a34a':'#0f1729' }}>{p.q1?fmtN(p.q1):'—'}</td>
-                          <td style={{ ...st.td,textAlign:'right' }}>{fmtVal(p.v0)}</td><td style={{ ...st.td,textAlign:'right' }}>{fmtVal(p.v1)}</td>
-                          <td style={{ ...st.td,textAlign:'right',whiteSpace:'nowrap',fontWeight:700,color:p.diff>=0?'#16a34a':'#dc2626' }}>
-                            {p.v0===0 ? <span style={{ color:'#1341c4' }}>novo</span> : p.v1===0 ? 'parou' : (p.varV>=0?'▲':'▼')+' '+Math.abs(p.varV).toFixed(1).replace('.',',')+'%'}
-                          </td>
-                          {[p.f0,p.f1].map((fs,j)=>(
-                            <td key={j} style={{ ...st.td,fontSize:11,...(j===0?{borderLeft:'2px solid #e2e6f0'}:{}) }}>
-                              {fs.length===0 ? <span style={{ color:'#9aa6bf' }}>{(j?p.q1:p.q0) ? 'vendido em R$' : '—'}</span> : fs.map((f,i)=>(
-                                <div key={i} style={{ whiteSpace:'nowrap' }} title={f.suspeita?'Cotação do dia fora do padrão do mês: este preço em euro provavelmente está errado na planilha':''}>
-                                  <b style={{ color:f.suspeita?'#b45309':'#0f1729' }}>{fmtEur(f.preco)}</b>{f.suspeita&&' ⚠'}
-                                  <span style={{ color:'#9aa6bf' }}> · {rotuloMeses(f)} · {fmtN(f.qtde)} un</span>
-                                </div>
-                              ))}
-                            </td>
-                          ))}
-                        </tr>,
-                        abre && (
-                          <tr key={p.produto+'-x'}><td colSpan={8} style={{ padding:'4px 8px 12px 28px',background:'#f7f9ff',borderBottom:'1px solid #e2e6f0' }}>
-                            <table style={{ borderCollapse:'collapse',fontSize:11 }}>
-                              <thead><tr>{['Data','NF','Qtde','R$ unit.','Cotação','€ pago'].map(h=><th key={h} style={{ ...st.th,background:'#f7f9ff',position:'static',textAlign:h==='Data'||h==='NF'?'left':'right',fontSize:9 }}>{h}</th>)}</tr></thead>
-                              <tbody>{linhasAbertas.map((c,i)=>{ const s=linhaSuspeita(c,precos.cotMediana||{}); return (
-                                <tr key={i}>
-                                  <td style={{ ...st.td,fontSize:11 }}>{fmtData(c.data)}</td>
-                                  <td style={{ ...st.td,fontSize:11 }}>{c.nf||'—'}</td>
-                                  <td style={{ ...st.td,fontSize:11,textAlign:'right' }}>{fmtN(c.qtde)}</td>
-                                  <td style={{ ...st.td,fontSize:11,textAlign:'right' }}>{fmtRs(c.valor_unit)}</td>
-                                  <td style={{ ...st.td,fontSize:11,textAlign:'right',color:s?'#b45309':undefined,fontWeight:s?700:400 }} title={s?'Fora do padrão do mês ('+String(Math.round(precos.cotMediana[c.ano+'-'+c.mes]*1e4)/1e4).replace('.',',')+')':''}>{c.cotacao_euro?String(c.cotacao_euro).replace('.',','):'—'}{s&&' ⚠'}</td>
-                                  <td style={{ ...st.td,fontSize:11,textAlign:'right',fontWeight:700 }}>{c.preco_euro?fmtEur(c.preco_euro):'—'}</td>
-                                </tr>
-                              )})}</tbody>
-                            </table>
-                          </td></tr>
-                        )
-                      ]
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              )}
-              <div style={{ fontSize:10,color:'#9aa6bf',marginTop:8 }}>Dois preços no mesmo ano = reajuste no período. <b style={{ color:'#b45309' }}>⚠</b> = a cotação daquele dia está fora do padrão do mês, então o € dessa compra provavelmente está errado na planilha. "Vendido em R$" = produto sem cotação em euro.</div>
-            </div>
-          )}
 
           {/* PARTICIPAÇÃO DE CADA CLIENTE NO MÊS */}
           <div style={st.card}>
