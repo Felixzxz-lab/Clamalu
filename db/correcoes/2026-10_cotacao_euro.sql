@@ -49,12 +49,10 @@ update vendas
    set preco_euro = round(valor_unit / cotacao_euro, 4)
  where id = 21053 and nf = 34292 and preco_euro < 7;
 
--- NÃO corrigido aqui, falta confirmar com a Clamalu (produto trocado na linha
--- da NF; R$ e quantidade de cada linha estão coerentes, então não dá para
--- saber se trocou o produto ou o preço):
---   NF 32391 (Fleury, 25/10/2024): Chymax Extra a R$ 576,06 e TCC 20 500 U a R$ 186,26
---   NF 33317 (TB Laticínios, 25/04/2025): TCC 20 50 U a R$ 752,12 e TCC 20 500 U a R$ 96,07
---   NF 33484 (TB Laticínios, 27/05/2025): TCC 20 50 U a R$ 96,01 e TCC 20 500 U a R$ 751,67 (está certa; é a referência)
+-- NFs 32391 (Fleury) e 33317 (TB Laticínios) parecem ter o produto trocado
+-- na linha, mas ficam como estão: decisão do usuário em 09/10/2026 de não
+-- mexer nas notas. Na tela Comparação elas já ficam fora da faixa de €
+-- (preço a mais de 40% do normal do produto).
 
 -- Conferência: deve voltar 27 linhas, todas com "confere" = true.
 select id, data, nf, cliente, produto, valor_unit, cotacao_euro, preco_euro,
